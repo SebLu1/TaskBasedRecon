@@ -134,7 +134,12 @@ class improved_binary_classifier(object):
         # Output network results
         return output
 
-class UNet(object):
+def bin_softmax(x):
+    e = tf.exp(x)
+    o = tf.ones(shape=tf.shape(x))
+    return tf.divide(e, o+e)
+
+class UNet_segmentation(object):
     def __init__(self, size, colors, parameter_sharing = True):
         self.colors = colors
         self.size = size
@@ -142,8 +147,13 @@ class UNet(object):
         self.used = False
 
     def raw_net(self, input, reuse):
+        # same shape conv
+        pre1 =  tf.layers.conv2d(inputs=input, filters=16, kernel_size=[5, 5],
+                                      padding="same", name='pre1', reuse=reuse, activation=tf.nn.relu)
+        pre2 =  tf.layers.conv2d(inputs=pre1, filters=32, kernel_size=[5, 5],
+                                      padding="same", name='pre2', reuse=reuse, activation=tf.nn.relu)
         # 128
-        conv1 = tf.layers.conv2d(inputs=input, filters=32, kernel_size=[5, 5],
+        conv1 = tf.layers.conv2d(inputs=pre2, filters=32, kernel_size=[5, 5],
                                       padding="same", name='conv1', reuse=reuse, activation=tf.nn.relu)
         # 64
         pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
@@ -162,10 +172,10 @@ class UNet(object):
         conv5 =  tf.layers.conv2d_transpose(inputs=concat1, filters=32, kernel_size=[5, 5],
                                            strides= (2,2), padding="same", name='deconv2',
                                             reuse=reuse, activation=tf.nn.relu)
-        concat2 = tf.concat([conv5, input], axis= 3)
+        concat2 = tf.concat([conv5, pre1], axis= 3)
         output = tf.layers.conv2d(inputs=concat2, filters=self.colors, kernel_size=[5, 5],
                                   padding="same",name='deconv3',
-                                  reuse=reuse,  activation=tf.nn.relu)
+                                  reuse=reuse,  activation=bin_softmax)
         return output
 
     def net(self, input):
@@ -174,7 +184,7 @@ class UNet(object):
             self.used = True
         return output
 
-class fully_convolutional(UNet):
+class fully_convolutional(UNet_segmentation):
 
     def raw_net(self, input, reuse):
         # 128

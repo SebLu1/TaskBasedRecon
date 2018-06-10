@@ -46,7 +46,7 @@ class generic_framework(object):
     def __init__(self):
         self.data_pip = self.get_Data_pip()
         self.colors = 1
-        self.image_size = (128,128)
+        self.image_size = (512,512)
         self.network = self.get_network(self.image_size, self.colors)
         self.model = self.get_model(self.image_size)
         self.image_space = self.model.get_image_size()
@@ -72,22 +72,19 @@ class generic_framework(object):
         y = np.empty((batch_size, self.measurement_space[0], self.measurement_space[1], self.colors), dtype='float32')
         x_true = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
         fbp = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
-
+        nodules = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
         for i in range(batch_size):
-            if training_data:
-                image = self.data_pip.load_data(training_data=True)
-            else:
-                image = self.data_pip.load_data(training_data=False)
-            for k in range(self.data_pip.colors):
-                data = self.model.forward_operator(image[...,k])
+            pic, nod, _ = self.data_pip.load_nodule(training_data=training_data)
+            data = self.model.forward_operator(pic)
 
-                # add white Gaussian noise
-                noisy_data = data + np.random.normal(size = self.measurement_space) * self.noise_level
+            # add white Gaussian noise
+            noisy_data = data + np.random.normal(size = self.measurement_space) * self.noise_level
 
-                fbp [i, ..., k] = self.model.inverse(noisy_data)
-                x_true[i, ..., k] = image[...,k]
-                y[i, ..., k] = noisy_data
-        return y, x_true, fbp
+            fbp [i, ..., 0] = self.model.inverse(noisy_data)
+            x_true[i, ..., 0] = pic[...]
+            y[i, ..., 0] = noisy_data
+            nodules[i,...,0] = nod
+        return y, x_true, fbp, nodules
 
     # puts in place the folders needed to save the results obtained with the current model
     def generate_folders(self):
@@ -153,3 +150,6 @@ class generic_framework(object):
     ### generic method for subclasses
     def deploy(self, true, guess, measurement):
         pass
+
+class pure_segmentation(generic_framework):
+    pass

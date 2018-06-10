@@ -91,6 +91,75 @@ class LUNA(object):
         return valid
 
 
+    # mehtode to get a random image with a big nodule
+    def load_nodule(self, training_data = True):
+        j = 0
+        path = ''
+        xml_path = ''
+        path_list = []
+        z_position = 0
+        annotations = np.zeros(shape=(512, 512))
+        nodules = np.zeros(shape=(512, 512))
+        while j < 1000:
+            if training_data:
+                xml_path = self.xml_training_list[randint(0, self.xml_training_list_length - 1)]
+            else:
+                xml_path = self.xml_eval_list[randint(0, self.xml_eval_list_length - 1)]
+            if self.valid_xml(xml_path):
+                f = ElementTree.parse(xml_path).getroot()
+                docs = f.findall('{http://www.nih.gov}readingSession')
+                nodules = docs[randint(0, len(docs) - 1)].findall('{http://www.nih.gov}unblindedReadNodule')
+                nod = nodules[randint(0, len(nodules) - 1)]
+                slices = nod.findall('{http://www.nih.gov}roi')
+                slice = slices[randint(0, len(slices) - 1)]
+                z_position = float(slice[0].text)
+                id = slice[1].text
+                if len(slice.findall('{http://www.nih.gov}edgeMap')) > 10:
+                    # read out annotation map of chosen nodule
+                    annotations = np.zeros(shape=(512, 512))
+                    nodules = np.zeros(shape=(512, 512))
+                    vertices = []
+                    for coord in slice.findall('{http://www.nih.gov}edgeMap'):
+                        vertices.append((int(coord[0].text), int(coord[1].text)))
+                        annotations[int(coord[0].text), int(coord[1].text)] = 1
+                        nodules[int(coord[0].text), int(coord[1].text)] = 1
+                    try:
+                        poly = Polygon(vertices)
+                        bnd = poly.bounds
+                        for x in range(int(bnd[0]), int(bnd[2] + 1)):
+                            for y in range(int(bnd[1]), int(bnd[3] + 1)):
+                                point = Point(x, y)
+                                if point.within(poly):
+                                    nodules[x, y] = 1
+                        j = 2000
+                    except ValueError:
+                        nodules = annotations
+                        print('Polygone filling failed. Draw new nodule')
+            j = j + 1
+
+        k = -1
+        while (not xml_path[k] == '/') and k > -1000:
+            k = k - 1
+        last_number = len(xml_path) + k
+        cut_path = xml_path[0:last_number]
+        path_list = ut.find('*dcm', cut_path)
+
+        ### find image in path_list that fits the z position and id of the chosen nodule
+        for im_path in path_list:
+            dc_file = dc.read_file(im_path)
+            image_z = (dc_file[0x0020, 0x0032].value)[2]
+            image_id = dc_file[0x0008, 0x0018].value
+            if image_z == z_position:
+                path = im_path
+                assert image_id == id
+
+        dc_file = dc.read_file(path)
+        pic = dc_file.pixel_array
+        pic = pic - np.amin(pic)
+        pic = pic / np.amax(pic)
+
+        return pic, nodules, annotations
+
 
     # gets and processes the data
     def get_raw_data(self, path, xml_path):
