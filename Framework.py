@@ -19,8 +19,8 @@ import util as ut
 from forward_models import ct
 from DataProcessing import LUNA
 from Networks import binary_classifier
-from Networks import UNet
 from Networks import fully_convolutional
+from Networks import UNet_segmentation
 
 
 # This class provides methods necessary
@@ -168,4 +168,87 @@ class generic_framework(object):
         pass
 
 class pure_segmentation(generic_framework):
-    pass
+    model_name = 'PureSegmentation'
+
+    # learning rate for Adams
+    learning_rate = 0.001
+    # The batch size
+    batch_size = 16
+
+    # methods to define the models used in framework
+    def get_network(self, size, colors):
+        return UNet_segmentation(size=size, colors=colors)
+
+    def get_Data_pip(self):
+        return LUNA()
+
+    def get_model(self, size):
+        return ct(size=size)
+
+    def __init__(self):
+        # call superclass init
+        super(pure_segmentation, self).__init__()
+
+        # placeholder
+        self.input_image = tf.placeholder(shape=(None, 64, 64, 1), dtype=tf.float32)
+        self.input_seg = tf.placeholder(shape=(None, 64, 64, 1), dtype=tf.float32)
+
+        output_seg = self.network.net(self.input_image)
+
+        # CE loss for 1st order mistakes
+        segmentation_map1 = tf.multiply(tf.log(output_seg), self.input_seg)
+        loss1 = - tf.reduce_mean(segmentation_map1)
+
+        # CE loss for 2nd order mistakes
+        segmentation_map2 = tf.multiply(tf.log(1 - output_seg), 1 - self.input_seg)
+        loss2 = - tf.reduce_mean(segmentation_map2)
+
+        # total loss
+        self.loss = 20 * loss1 + loss2
+
+        # optimizer
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss,
+                                                                             global_step=self.global_step)
+        # logging tools
+        tf.summary.scalar('Loss_overall', self.loss)
+        tf.summary.scalar('Loss_no_module', loss1)
+        tf.summary.scalar('Loss_abundant_module', loss2)
+        tf.summary.image('Scan', self.input_image)
+        tf.summary.image('Annotation', self.input_seg)
+        tf.summary.image('Segmentation', output_seg)
+
+        # set up the logger
+        self.merged = tf.summary.merge_all()
+        self.writer = tf.summary.FileWriter(self.path + 'Logs/',
+                                            self.sess.graph)
+
+        # initialize Variables
+        tf.global_variables_initializer().run()
+
+        # load existing saves
+        self.load()
+
+    def log(self, pics, annos):
+        summary, step = self.sess.run([self.merged, self.global_step],
+                                      feed_dict={self.input_image: pics,
+                                                self.input_seg: annos})
+        self.writer.add_summary(summary, step)
+
+    def train(self, steps):
+        for k in range(steps):
+            pics, annos = self.generate_segmentation_data(self.batch_size)
+            self.sess.run(self.optimizer, feed_dict={self.input_image: pics,
+                                                     self.input_seg: annos})
+            if k % 20 == 0:
+                iteration, loss = self.sess.run([self.global_step, self.loss], feed_dict={self.input_image: pics,
+                                                     self.input_seg: annos})
+                print('Iteration: ' + str(iteration) + ', CE: ' + str(loss))
+
+                # logging has to be adopted
+                self.log(pics, annos)
+
+        self.save(self.global_step)
+
+    def evaluate(self):
+        pass

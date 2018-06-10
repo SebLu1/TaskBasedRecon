@@ -145,7 +145,7 @@ def downsampling_block(tensor, name, filters, reuse, kernel = [5,5]):
                                           padding="same", name='conv1', reuse=reuse, activation=tf.nn.relu)
         conv2 = tf.layers.conv2d(inputs=conv1, filters=filters, kernel_size=kernel,
                                           padding="same", name='conv2', reuse=reuse, activation=tf.nn.relu)
-        pool = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+        pool = tf.layers.average_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
         return pool
 
 def upsampling_block(tensor, name, filters, reuse, kernel = [5,5]):
@@ -166,7 +166,7 @@ class UNet_segmentation(object):
 
     def raw_net(self, input, reuse):
         # same shape conv
-        pre1 =  tf.layers.conv2d(inputs=input, filters=16, kernel_size=[5, 5],
+        pre1 = tf.layers.conv2d(inputs=input, filters=16, kernel_size=[5, 5],
                                       padding="same", name='pre1', reuse=reuse, activation=tf.nn.relu)
         # downsampling 1
         down1 = downsampling_block(tensor= pre1, name='down1', filters= 32, reuse=reuse)
@@ -198,11 +198,11 @@ class UNet_segmentation(object):
 
 
         post1 = tf.layers.conv2d(inputs=con4, filters=16, kernel_size=[5, 5],
-                                  padding="same",name='post1',
+                                  padding="same", name='post1',
                                   reuse=reuse,  activation=tf.nn.relu)
 
         post2 = tf.layers.conv2d(inputs=post1, filters=1, kernel_size=[5, 5],
-                                  padding="same",name='post2',
+                                  padding="same", name='post2',
                                   reuse=reuse,  activation=bin_softmax)
         return post2
 
