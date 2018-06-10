@@ -12,7 +12,6 @@ import odl
 import odl.contrib.tensorflow
 from skimage.measure import compare_ssim as ssim
 
-import dicom as dc
 from scipy.misc import imresize
 import tensorflow as tf
 import util as ut

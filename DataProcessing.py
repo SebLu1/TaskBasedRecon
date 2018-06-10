@@ -1,4 +1,4 @@
-import dicom as dc
+import pydicom as dc
 import numpy as np
 import os
 import fnmatch
@@ -23,10 +23,10 @@ class LUNA(object):
         name = platform.node()
         Train_Path = ''
         Eval_Path = ''
-        if name == 'LAPTOP-E6AJ1CPF':
+        if not name == 'motel':
             Train_Path = './Segmentation_Data'
             Eval_Path = './Segmentation_Data'
-        elif name == 'motel':
+        else:
             Train_Path = '/local/scratch/public/sl767/LUNA/Training_Data'
             Eval_Path = '/local/scratch/public/sl767/LUNA/Evaluation_Data'
         # List the existing training data
