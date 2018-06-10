@@ -66,24 +66,41 @@ class generic_framework(object):
         # generate needed folder structure
         self.generate_folders()
 
+    # method to generate training data for the segmentation algorithm
     # method to generate training data given the current model type
-    def generate_training_data(self, batch_size, training_data = True):
-        y = np.empty((batch_size, self.measurement_space[0], self.measurement_space[1], self.colors), dtype='float32')
-        x_true = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
-        fbp = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
-        nodules = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
-        for i in range(batch_size):
-            pic, nod, _ = self.data_pip.load_nodule(training_data=training_data)
-            data = self.model.forward_operator(pic)
+    def generate_segmentation_data(self, batch_size, training_data=True):
+        pics = np.zeros(shape=[batch_size * 2, 64, 64, 1])
+        annos = np.zeros(shape=[batch_size * 2, 64, 64, 1])
+        for k in range(batch_size):
+            pic, vertices, nodules = self.data_pip.load_data(training_data=training_data)
+            pic_cut, nod_cut, pic_rand, nod_rand = self.data_pip.cut_data(pic, nodules, vertices)
 
-            # add white Gaussian noise
-            noisy_data = data + np.random.normal(size = self.measurement_space) * self.noise_level
+            pics[k, ..., 0] = pic_cut
+            annos[k, ..., 0] = nod_cut
 
-            fbp [i, ..., 0] = self.model.inverse(noisy_data)
-            x_true[i, ..., 0] = pic[...]
-            y[i, ..., 0] = noisy_data
-            nodules[i,...,0] = nod
-        return y, x_true, fbp, nodules
+            pics[k + batch_size, ..., 0] = pic_rand
+            annos[k + batch_size, ..., 0] = nod_rand
+        return pics, annos
+
+
+    # # method to generate training data given the current model type
+    # def generate_training_data(self, batch_size, training_data = True):
+    #     y = np.empty((batch_size, self.measurement_space[0], self.measurement_space[1], self.colors), dtype='float32')
+    #     x_true = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
+    #     fbp = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
+    #     nodules = np.empty((batch_size, self.image_space[0], self.image_space[1], self.colors), dtype='float32')
+    #     for i in range(batch_size):
+    #         pic, nod, _ = self.data_pip.load_nodule(training_data=training_data)
+    #         data = self.model.forward_operator(pic)
+    #
+    #         # add white Gaussian noise
+    #         noisy_data = data + np.random.normal(size = self.measurement_space) * self.noise_level
+    #
+    #         fbp [i, ..., 0] = self.model.inverse(noisy_data)
+    #         x_true[i, ..., 0] = pic[...]
+    #         y[i, ..., 0] = noisy_data
+    #         nodules[i,...,0] = nod
+    #     return y, x_true, fbp, nodules
 
     # puts in place the folders needed to save the results obtained with the current model
     def generate_folders(self):
