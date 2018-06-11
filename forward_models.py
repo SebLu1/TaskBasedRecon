@@ -43,10 +43,10 @@ class ct(forward_model):
     name = 'Computed_Tomography'
 
     def __init__(self, size):
-        self.space = odl.uniform_discr([-64, -64], [64, 64], [size[0], size[1]],
+        self.space = odl.uniform_discr([-256, -256], [256, 256], [512, 512],
                                   dtype='float32')
 
-        geometry = odl.tomo.parallel_beam_geometry(self.space, num_angles=30)
+        geometry = odl.tomo.parallel_beam_geometry(self.space, num_angles=360)
         op = odl.tomo.RayTransform(self.space, geometry)
 
         # Ensure operator has fixed operator norm for scale invariance
@@ -87,35 +87,35 @@ class ct(forward_model):
     def get_odl_operator(self):
         return self.operator
 
-class denoising(forward_model):
-    name = 'Denoising'
-
-    def __init__(self, size):
-        self.size = size
-        self.space = odl.uniform_discr([-64, -64], [64, 64], [size[0], size[1]],
-                                  dtype='float32')
-        self.operator = odl.IdentityOperator(self.space)
-
-    def get_image_size(self):
-        return self.size
-
-    def get_measurement_size(self):
-        return self.size
-
-    def forward_operator(self, image):
-        return image
-
-    def inverse(self, measurement):
-        return measurement
-
-    def tensorflow_operator(self, input):
-        return input
-
-    def tensorflow_adjoint_operator(self, input):
-        return input
-
-    def get_odl_space(self):
-        return self.space
-
-    def get_odl_operator(self):
-        return self.operator
+# class denoising(forward_model):
+#     name = 'Denoising'
+#
+#     def __init__(self, size):
+#         self.size = size
+#         self.space = odl.uniform_discr([-64, -64], [64, 64], [size[0], size[1]],
+#                                   dtype='float32')
+#         self.operator = odl.IdentityOperator(self.space)
+#
+#     def get_image_size(self):
+#         return self.size
+#
+#     def get_measurement_size(self):
+#         return self.size
+#
+#     def forward_operator(self, image):
+#         return image
+#
+#     def inverse(self, measurement):
+#         return measurement
+#
+#     def tensorflow_operator(self, input):
+#         return input
+#
+#     def tensorflow_adjoint_operator(self, input):
+#         return input
+#
+#     def get_odl_space(self):
+#         return self.space
+#
+#     def get_odl_operator(self):
+#         return self.operator

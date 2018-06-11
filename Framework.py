@@ -21,6 +21,7 @@ from DataProcessing import LUNA
 from Networks import binary_classifier
 from Networks import fully_convolutional
 from Networks import UNet_segmentation
+from Networks import UNet
 
 
 # This class provides methods necessary
@@ -81,6 +82,26 @@ class generic_framework(object):
             pics[k + batch_size, ..., 0] = pic_rand
             annos[k + batch_size, ..., 0] = nod_rand
         return pics, annos
+
+    def generate_reconstruction_data(self, batch_size, training_data = True, noise_level = None):
+        if noise_level == None:
+            noise_level = self.noise_level
+        y = np.zeros((batch_size, self.measurement_space[0], self.measurement_space[1], 1), dtype='float32')
+        x_true = np.zeros((batch_size, 512, 512, 1), dtype='float32')
+        fbp = np.zeros((batch_size, 512, 512, 1), dtype='float32')
+
+        for i in range(batch_size):
+            pic, vertices, nodules = self.data_pip.load_data(training_data=training_data)
+            data = self.model.forward_operator(pic)
+
+            # add white Gaussian noise
+            noisy_data = data + np.random.normal(size = self.measurement_space) * noise_level * np.average(np.abs(data))
+            print(np.average((np.abs(data))))
+
+            fbp [i, ..., 0] = self.model.inverse(noisy_data)
+            x_true[i, ..., 0] = pic[...]
+            y[i, ..., 0] = noisy_data
+        return y, x_true, fbp
 
 
     # # method to generate training data given the current model type
@@ -172,7 +193,7 @@ class pure_segmentation(generic_framework):
     experiment_name = 'default_experiment'
 
     # learning rate for Adams
-    learning_rate = 0.001
+    learning_rate = 0.0005
     # The batch size
     batch_size = 16
 
@@ -253,3 +274,85 @@ class pure_segmentation(generic_framework):
 
     def evaluate(self):
         pass
+
+
+class postprocessing(generic_framework):
+    model_name = 'PostProcessing'
+
+    # learning rate for Adams
+    learning_rate = 0.001
+    # The batch size
+    batch_size = 64
+
+    # methods to define the models used in framework
+    def get_network(self, size, colors):
+        return UNet(size=size, colors=colors)
+
+    def get_Data_pip(self):
+        return LUNA()
+
+    def get_model(self, size):
+        return ct(size=size)
+
+    def __init__(self):
+        # call superclass init
+        super(postprocessing, self).__init__()
+
+        # set placeholder for input and correct output
+        self.true = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+                                   dtype=tf.float32)
+        self.y = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+                                dtype=tf.float32)
+        # network output
+        self.out = self.network.net(self.y)
+        # compute loss
+        data_mismatch = tf.square(self.out - self.true)
+        self.loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum(data_mismatch, axis=(1, 2, 3))))
+        # optimizer
+        # optimizer for Wasserstein network
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss,
+                                                                             global_step=self.global_step)
+        # logging tools
+        tf.summary.scalar('Loss', self.loss)
+        tf.summary.image('GroundTruth', self.true)
+        tf.summary.image('FBP', self.y)
+        tf.summary.image('Reconstruction', self.out)
+
+        # set up the logger
+        self.merged = tf.summary.merge_all()
+        self.writer = tf.summary.FileWriter(self.path + 'Logs/',
+                                            self.sess.graph)
+
+        # initialize Variables
+        tf.global_variables_initializer().run()
+
+        # load existing saves
+        self.load()
+
+    def log(self, x, y):
+        summary, step = self.sess.run([self.merged, self.global_step],
+                                      feed_dict={self.true: x,
+                                                 self.y: y})
+        self.writer.add_summary(summary, step)
+
+    def train(self, steps):
+        for k in range(steps):
+            y, x_true, fbp = self.generate_training_data(self.batch_size)
+            self.sess.run(self.optimizer, feed_dict={self.true: x_true,
+                                                     self.y: fbp})
+            if k % 50 == 0:
+                iteration, loss = self.sess.run([self.global_step, self.loss], feed_dict={self.true: x_true,
+                                                                                          self.y: fbp})
+                print('Iteration: ' + str(iteration) + ', MSE: ' + str(loss))
+
+                # logging has to be adopted
+                self.log(x_true, fbp)
+                output = self.sess.run(self.out, feed_dict={self.true: x_true,
+                                                            self.y: fbp})
+                self.visualize(x_true, fbp, output, 'Iteration_{}'.format(iteration))
+        self.save(self.global_step)
+
+    def evaluate(self):
+        y, x_true, fbp = self.generate_training_data(self.batch_size)
+

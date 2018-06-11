@@ -212,6 +212,49 @@ class UNet_segmentation(object):
             self.used = True
         return output
 
+class UNet(object):
+    def __init__(self, size, colors, parameter_sharing = True):
+        self.colors = colors
+        self.size = size
+        self.parameter_sharing = parameter_sharing
+        self.used = False
+
+    def raw_net(self, input, reuse):
+        # same shape conv
+        pre1 = tf.layers.conv2d(inputs=input, filters=16, kernel_size=[5, 5],
+                                      padding="same", name='pre1', reuse=reuse, activation=tf.nn.relu)
+        # downsampling 1
+        down1 = downsampling_block(tensor= pre1, name='down1', filters= 32, reuse=reuse)
+
+        # downsampling 2
+        down2 = downsampling_block(tensor=down1, name='down2', filters=64, reuse=reuse)
+
+        # upsampling 3
+        up3 = upsampling_block(tensor=down2, name='up3', filters=64, reuse=reuse)
+        con3 = tf.concat([up3, down1], axis = 3)
+
+        # upsampling 4
+        up4 = upsampling_block(tensor=con3, name='up4', filters=32, reuse=reuse)
+        con4 = tf.concat([up4, pre1], axis = 3)
+
+
+        post1 = tf.layers.conv2d(inputs=con4, filters=16, kernel_size=[5, 5],
+                                  padding="same", name='post1',
+                                  reuse=reuse,  activation=tf.nn.relu)
+
+        post2 = tf.layers.conv2d(inputs=post1, filters=1, kernel_size=[5, 5],
+                                  padding="same", name='post2',
+                                  reuse=reuse, activation = tf.nn.relu)
+        return post2
+
+    def net(self, input):
+        output = self.raw_net(input, reuse=self.used)
+        if self.parameter_sharing:
+            self.used = True
+        return output
+
+
+
 class fully_convolutional(UNet_segmentation):
 
     def raw_net(self, input, reuse):
