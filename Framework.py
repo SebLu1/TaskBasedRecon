@@ -286,7 +286,7 @@ class postprocessing(generic_framework):
 
     # methods to define the models used in framework
     def get_network(self, size, colors):
-        return UNet(size=size, colors=colors)
+        return fully_convolutional(size=size, colors=colors)
 
     def get_Data_pip(self):
         return LUNA()
