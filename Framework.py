@@ -338,7 +338,7 @@ class postprocessing(generic_framework):
 
     def train(self, steps):
         for k in range(steps):
-            y, x_true, fbp = self.generate_reconstruction_data(self.batch_size)
+            y, x_true, fbp = self.generate_reconstruction_data(self.batch_size, noise_level=0)
             self.sess.run(self.optimizer, feed_dict={self.true: x_true,
                                                      self.y: fbp})
             if k % 20 == 0:
