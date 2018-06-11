@@ -169,6 +169,7 @@ class generic_framework(object):
 
 class pure_segmentation(generic_framework):
     model_name = 'PureSegmentation'
+    experiment_name = 'default_experiment'
 
     # learning rate for Adams
     learning_rate = 0.001

@@ -133,9 +133,8 @@ class LUNA(object):
                 dc_file = dc.read_file(im_path)
                 image_z = (dc_file[0x0020, 0x0032].value)[2]
                 image_id = dc_file[0x0008, 0x0018].value
-                if image_id == id:
+                if image_id == id and image_z == z_position:
                     path = im_path
-                    assert image_z == z_position
 
             if not path == '':
                 dc_file = dc.read_file(path)
