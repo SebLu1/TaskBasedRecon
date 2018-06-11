@@ -259,19 +259,19 @@ class fully_convolutional(UNet_segmentation):
 
     def raw_net(self, input, reuse):
         # 128
-        conv1 = tf.layers.conv2d(inputs=input, filters=32, kernel_size=[5, 5],
+        conv1 = tf.layers.conv2d(inputs=input, filters=8, kernel_size=[5, 5],
                                  padding="same", name='conv1', reuse=reuse, activation=tf.nn.relu)
         # 64
-        conv2 = tf.layers.conv2d(inputs=conv1, filters=64, kernel_size=[5, 5],
+        conv2 = tf.layers.conv2d(inputs=conv1, filters=16, kernel_size=[5, 5],
                                  padding="same", name='conv2', reuse=reuse, activation=tf.nn.relu)
         # 32
-        conv3 = tf.layers.conv2d(inputs=conv2, filters=64, kernel_size=[3, 3],
+        conv3 = tf.layers.conv2d(inputs=conv2, filters=32, kernel_size=[3, 3],
                                  padding="same", name='conv3', reuse=reuse, activation=tf.nn.relu)
         # 64
-        conv4 = tf.layers.conv2d(inputs=conv3, filters=32, kernel_size=[5, 5],
+        conv4 = tf.layers.conv2d(inputs=conv3, filters=16, kernel_size=[5, 5],
                                  padding="same", name='conv4',reuse=reuse, activation=tf.nn.relu)
         # 128
-        conv5 = tf.layers.conv2d(inputs=conv4, filters=32, kernel_size=[5, 5],
+        conv5 = tf.layers.conv2d(inputs=conv4, filters=8, kernel_size=[5, 5],
                                  padding="same", name='conv5', reuse=reuse, activation=tf.nn.relu)
         output = tf.layers.conv2d(inputs=conv5, filters=self.colors, kernel_size=[5, 5],
                                   padding="same", name='conv6', reuse=reuse)

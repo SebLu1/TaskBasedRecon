@@ -280,9 +280,9 @@ class postprocessing(generic_framework):
     model_name = 'PostProcessing'
 
     # learning rate for Adams
-    learning_rate = 0.001
+    learning_rate = 0.0003
     # The batch size
-    batch_size = 32
+    batch_size = 4
 
     # methods to define the models used in framework
     def get_network(self, size, colors):
