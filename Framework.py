@@ -262,6 +262,7 @@ class pure_segmentation(generic_framework):
             self.sess.run(self.optimizer, feed_dict={self.input_image: pics,
                                                      self.input_seg: annos})
             if k % 20 == 0:
+                pics, annos = self.generate_segmentation_data(self.batch_size, training_data=False)
                 iteration, loss = self.sess.run([self.global_step, self.loss], feed_dict={self.input_image: pics,
                                                      self.input_seg: annos})
                 print('Iteration: ' + str(iteration) + ', CE: ' + str(loss))
@@ -337,7 +338,7 @@ class postprocessing(generic_framework):
 
     def train(self, steps):
         for k in range(steps):
-            y, x_true, fbp = self.generate_reconstruction_data(self.batch_size, noise_level=0.1)
+            y, x_true, fbp = self.generate_reconstruction_data(self.batch_size, noise_level=0.03)
             self.sess.run(self.optimizer, feed_dict={self.true: x_true,
                                                      self.y: fbp})
             if k % 20 == 0:
