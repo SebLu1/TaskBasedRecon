@@ -82,34 +82,35 @@ class LUNA(object):
                 f = ElementTree.parse(xml_path).getroot()
                 docs = f.findall('{http://www.nih.gov}readingSession')
                 nodules = docs[randint(0, len(docs) - 1)].findall('{http://www.nih.gov}unblindedReadNodule')
-                nod = nodules[randint(0, len(nodules) - 1)]
-                slices = nod.findall('{http://www.nih.gov}roi')
-                slice = slices[randint(0, len(slices) - 1)]
-                z_position = float(slice[0].text)
-                id = slice[1].text
-                if len(slice.findall('{http://www.nih.gov}edgeMap')) > 10:
-                    # read out annotation map of chosen nodule
-                    annotations = np.zeros(shape=(512, 512))
-                    nodules = np.zeros(shape=(512, 512))
-                    vertices = []
-                    for coord in slice.findall('{http://www.nih.gov}edgeMap'):
-                        # print((int(coord[1].text), int(coord[0].text)))
-                        vertices.append((int(coord[1].text), int(coord[0].text)))
-                        annotations[int(coord[1].text), int(coord[0].text)] = 1
-                        nodules[int(coord[1].text), int(coord[0].text)] = 1
-                    try:
-                        poly = Polygon(vertices)
-                        bnd = poly.bounds
-                        for x in range(int(bnd[0]), int(bnd[2] + 1)):
-                            for y in range(int(bnd[1]), int(bnd[3] + 1)):
-                                point = Point(x, y)
-                                if point.within(poly):
-                                    nodules[x, y] = 1
-                        j = 1000
+                if len(nodules > 0):
+                    nod = nodules[randint(0, len(nodules) - 1)]
+                    slices = nod.findall('{http://www.nih.gov}roi')
+                    slice = slices[randint(0, len(slices) - 1)]
+                    z_position = float(slice[0].text)
+                    id = slice[1].text
+                    if len(slice.findall('{http://www.nih.gov}edgeMap')) > 10:
+                        # read out annotation map of chosen nodule
+                        annotations = np.zeros(shape=(512, 512))
+                        nodules = np.zeros(shape=(512, 512))
+                        vertices = []
+                        for coord in slice.findall('{http://www.nih.gov}edgeMap'):
+                            # print((int(coord[1].text), int(coord[0].text)))
+                            vertices.append((int(coord[1].text), int(coord[0].text)))
+                            annotations[int(coord[1].text), int(coord[0].text)] = 1
+                            nodules[int(coord[1].text), int(coord[0].text)] = 1
+                        try:
+                            poly = Polygon(vertices)
+                            bnd = poly.bounds
+                            for x in range(int(bnd[0]), int(bnd[2] + 1)):
+                                for y in range(int(bnd[1]), int(bnd[3] + 1)):
+                                    point = Point(x, y)
+                                    if point.within(poly):
+                                        nodules[x, y] = 1
+                            j = 1000
 
-                    except ValueError:
-                        nodules = annotations
-                        print('Polygone filling failed. Draw new nodule')
+                        except ValueError:
+                            nodules = annotations
+                            print('Polygone filling failed. Draw new nodule')
             j = j + 1
 
 
@@ -126,9 +127,9 @@ class LUNA(object):
             dc_file = dc.read_file(im_path)
             image_z = (dc_file[0x0020, 0x0032].value)[2]
             image_id = dc_file[0x0008, 0x0018].value
-            if image_z == z_position:
+            if image_id == id:
                 path = im_path
-                assert image_id == id
+                assert image_z == z_position
 
         dc_file = dc.read_file(path)
         pic = dc_file.pixel_array
