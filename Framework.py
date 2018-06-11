@@ -58,7 +58,7 @@ class generic_framework(object):
         if name == 'LAPTOP-E6AJ1CPF':
             path_prefix=''
         elif name == 'motel':
-            path_prefix='/local/scratch/public/sl767/DeepAdversarialRegulariser/'
+            path_prefix='/local/scratch/public/sl767/TaskBasedRecon/'
         self.path = path_prefix+'Saves/{}/{}/{}/{}/'.format(self.model.name, self.data_pip.name, self.model_name, self.experiment_name)
         # start tensorflow sesssion
         self.sess = tf.InteractiveSession()
