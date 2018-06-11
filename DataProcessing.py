@@ -82,7 +82,7 @@ class LUNA(object):
                 f = ElementTree.parse(xml_path).getroot()
                 docs = f.findall('{http://www.nih.gov}readingSession')
                 nodules = docs[randint(0, len(docs) - 1)].findall('{http://www.nih.gov}unblindedReadNodule')
-                if len(nodules > 0):
+                if len(nodules) > 0:
                     nod = nodules[randint(0, len(nodules) - 1)]
                     slices = nod.findall('{http://www.nih.gov}roi')
                     slice = slices[randint(0, len(slices) - 1)]
