@@ -96,7 +96,6 @@ class generic_framework(object):
 
             # add white Gaussian noise
             noisy_data = data + np.random.normal(size = self.measurement_space) * noise_level * np.average(np.abs(data))
-            print(np.average((np.abs(data))))
 
             fbp [i, ..., 0] = self.model.inverse(noisy_data)
             x_true[i, ..., 0] = pic[...]
