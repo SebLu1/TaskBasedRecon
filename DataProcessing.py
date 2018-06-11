@@ -62,9 +62,8 @@ class LUNA(object):
             valid = False
         return valid
 
-
-    # get a 64^2 patch picture
-    def load_data(self, training_data = True):
+    # get nodule annotation
+    def get_nodule_annotation(self, training_data = True):
         j = 0
         path = ''
         xml_path = ''
@@ -112,29 +111,38 @@ class LUNA(object):
                             nodules = annotations
                             print('Polygone filling failed. Draw new nodule')
             j = j + 1
+        return xml_path, id, z_position, nodules, vertices
 
 
 
-        # find image in path_list that fits the z position and id of the chosen nodule
-        k = -1
-        while (not xml_path[k] == '/') and k > -1000:
-            k = k - 1
-        last_number = len(xml_path) + k
-        cut_path = xml_path[0:last_number]
-        path_list = ut.find('*dcm', cut_path)
+    # get a 64^2 patch picture
+    def load_data(self, training_data = True):
+        j = 0
+        while j < 1000:
+            xml_path, id, z_position, nodules, vertices = self.get_nodule_annotation(training_data=training_data)
+            # find image in path_list that fits the z position and id of the chosen nodule
+            k = -1
+            while (not xml_path[k] == '/') and k > -1000:
+                k = k - 1
+            last_number = len(xml_path) + k
+            cut_path = xml_path[0:last_number]
+            path_list = ut.find('*dcm', cut_path)
+            path = ''
 
-        for im_path in path_list:
-            dc_file = dc.read_file(im_path)
-            image_z = (dc_file[0x0020, 0x0032].value)[2]
-            image_id = dc_file[0x0008, 0x0018].value
-            if image_id == id:
-                path = im_path
-                assert image_z == z_position
+            for im_path in path_list:
+                dc_file = dc.read_file(im_path)
+                image_z = (dc_file[0x0020, 0x0032].value)[2]
+                image_id = dc_file[0x0008, 0x0018].value
+                if image_id == id:
+                    path = im_path
+                    assert image_z == z_position
 
-        dc_file = dc.read_file(path)
-        pic = dc_file.pixel_array
-        pic = self.normalize(pic)
-
+            if not path == '':
+                dc_file = dc.read_file(path)
+                pic = dc_file.pixel_array
+                pic = self.normalize(pic)
+                j = 1000
+            j = j+1
         return pic, vertices, nodules
 
     def cut_data(self, pic, nodules, vertices):
