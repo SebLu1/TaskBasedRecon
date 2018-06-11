@@ -282,7 +282,7 @@ class postprocessing(generic_framework):
     # learning rate for Adams
     learning_rate = 0.001
     # The batch size
-    batch_size = 64
+    batch_size = 32
 
     # methods to define the models used in framework
     def get_network(self, size, colors):
@@ -315,9 +315,9 @@ class postprocessing(generic_framework):
                                                                              global_step=self.global_step)
         # logging tools
         tf.summary.scalar('Loss', self.loss)
-        tf.summary.image('GroundTruth', self.true)
-        tf.summary.image('FBP', self.y)
-        tf.summary.image('Reconstruction', self.out)
+        tf.summary.image('GroundTruth', self.true, max_outputs=1)
+        tf.summary.image('FBP', self.y, max_outputs=1)
+        tf.summary.image('Reconstruction', self.out, max_outputs=1)
 
         # set up the logger
         self.merged = tf.summary.merge_all()
@@ -338,21 +338,19 @@ class postprocessing(generic_framework):
 
     def train(self, steps):
         for k in range(steps):
-            y, x_true, fbp = self.generate_training_data(self.batch_size)
+            y, x_true, fbp = self.generate_reconstruction_data(self.batch_size)
             self.sess.run(self.optimizer, feed_dict={self.true: x_true,
                                                      self.y: fbp})
-            if k % 50 == 0:
+            if k % 20 == 0:
                 iteration, loss = self.sess.run([self.global_step, self.loss], feed_dict={self.true: x_true,
                                                                                           self.y: fbp})
                 print('Iteration: ' + str(iteration) + ', MSE: ' + str(loss))
 
                 # logging has to be adopted
                 self.log(x_true, fbp)
-                output = self.sess.run(self.out, feed_dict={self.true: x_true,
-                                                            self.y: fbp})
-                self.visualize(x_true, fbp, output, 'Iteration_{}'.format(iteration))
+
         self.save(self.global_step)
 
     def evaluate(self):
-        y, x_true, fbp = self.generate_training_data(self.batch_size)
+        y, x_true, fbp = self.generate_reconstruction_data(self.batch_size)
 
