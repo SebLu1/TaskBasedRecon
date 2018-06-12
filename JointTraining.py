@@ -25,6 +25,6 @@ if n ==2:
         experiment_name = 'Joint_Training'
 
     net = fully_joint_training()
-    print('Weighting parameter alpha:' + net.alpha)
+    print('Weighting parameter alpha:' + str(net.alpha))
     for k in range(5):
         net.joint_training(steps=200)
