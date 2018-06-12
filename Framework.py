@@ -61,6 +61,7 @@ class generic_framework(object):
         elif name == 'motel':
             path_prefix='/local/scratch/public/sl767/TaskBasedRecon/'
         self.path = path_prefix+'Saves/{}/{}/{}/{}/'.format(self.model.name, self.data_pip.name, self.model_name, self.experiment_name)
+        self.default_path = path_prefix+'Saves/{}/{}/{}/default_experiment/'.format(self.model.name, self.data_pip.name, self.model_name)
         # start tensorflow sesssion
         self.sess = tf.InteractiveSession()
 
@@ -244,6 +245,9 @@ class generic_framework(object):
         if os.listdir(self.path+'Data/'):
             saver.restore(self.sess, tf.train.latest_checkpoint(self.path+'Data/'))
             print('Save restored')
+        elif os.listdir(self.default_path+'Data/'):
+            saver.restore(self.sess, tf.train.latest_checkpoint(self.default_path+'Data/'))
+            print('Default Save restored')
         else:
             print('No save found')
 
@@ -589,3 +593,19 @@ class joint_training(generic_framework):
                 # logging has to be adopted
                 self.writer.add_summary(summary, iteration)
         self.save(self.global_step)
+
+    def pretrain_segmentation_reconstruction_input(self, steps):
+        for k in range(steps):
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
+            self.sess.run(self.optimizer_seg,feed_dict={self.true: x_true, self.y: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+            if k % 20 == 0:
+                summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
+                                                         feed_dict={self.true: x_true, self.y: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+                print('Iteration: ' + str(iteration) + ', CE: ' + str(ce))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
