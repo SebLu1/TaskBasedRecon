@@ -137,7 +137,7 @@ class generic_framework(object):
             ul_nod[i,:] = upper_left
             ul_rand[i,:]= np.random.randint(150, 314, size=2)
 
-        return y, x_true, fbp, ul_nod, ul_rand
+        return y, x_true, fbp, nodules, ul_nod, ul_rand
 
 
 
@@ -527,14 +527,19 @@ class joint_training(generic_framework):
 
     def pretrain_reconstruction(self, steps):
         for k in range(steps):
-            y, x_true, fbp, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
+            y, x_true, fbp, nodules, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
             self.sess.run(self.optimizer_recon, feed_dict={self.true: x_true,
                                                      self.y: fbp})
             if k % 20 == 0:
                 summary, iteration, loss = self.sess.run([self.merged,self.global_step, self.loss_l2],
-                                                         feed_dict={self.true: x_true, self.y: fbp})
+                                                         feed_dict={self.true: x_true, self.y: fbp,
+                                                                    self.segmentation: nodules,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
                 print('Iteration: ' + str(iteration) + ', MSE: ' + str(loss))
 
                 # logging has to be adopted
                 self.writer.add_summary(summary, iteration)
         self.save(self.global_step)
+
+    def pretrain_segmentation_true_input(self, steps):
+        pass
