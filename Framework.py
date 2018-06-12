@@ -453,7 +453,7 @@ class joint_training(generic_framework):
     experiment_name = 'default_experiment'
 
     # learning rate for Adams
-    learning_rate = 0.0001
+    learning_rate = 0.00005
     # The batch size
     batch_size = 4
     # Convex weight alpha trading off between L2 and CE loss for joint reconstruction
@@ -609,3 +609,4 @@ class joint_training(generic_framework):
 
                 # logging has to be adopted
                 self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
