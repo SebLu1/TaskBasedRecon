@@ -416,7 +416,7 @@ def CE(tensor1, tensor2, weight):
 
 
 class joint_training(generic_framework):
-    model_name = 'JointTraining'
+    model_name = 'JointTraining_PostPr'
     experiment_name = 'default_experiment'
 
     # learning rate for Adams
@@ -524,3 +524,17 @@ class joint_training(generic_framework):
 
         # load existing saves
         self.load()
+
+    def pretrain_reconstruction(self, steps):
+        for k in range(steps):
+            y, x_true, fbp, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
+            self.sess.run(self.optimizer_recon, feed_dict={self.true: x_true,
+                                                     self.y: fbp})
+            if k % 20 == 0:
+                summary, iteration, loss = self.sess.run([self.merged,self.global_step, self.loss_l2],
+                                                         feed_dict={self.true: x_true, self.y: fbp})
+                print('Iteration: ' + str(iteration) + ', MSE: ' + str(loss))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
