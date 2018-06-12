@@ -108,7 +108,7 @@ class generic_framework(object):
         y = np.zeros((batch_size, self.measurement_space[0], self.measurement_space[1], 1), dtype='float32')
         x_true = np.zeros((batch_size, 512, 512, 1), dtype='float32')
         fbp = np.zeros((batch_size, 512, 512, 1), dtype='float32')
-        annos = np.zeros((batch_size, 512,512,1), dtype=tf.float32)
+        annos = np.zeros((batch_size, 512,512,1), dtype='float32')
         ul_nod = np.zeros(shape=(batch_size, 2))
         ul_rand = np.zeros(shape=(batch_size, 2))
 
