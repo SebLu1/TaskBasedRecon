@@ -456,8 +456,8 @@ class joint_training(generic_framework):
     learning_rate = 0.00005
     # The batch size
     batch_size = 4
-    # Convex weight alpha trading off between L2 and CE loss for joint reconstruction
-    alpha = 0
+    # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
+    alpha = 0.7
 
     # methods to define the models used in framework
     def get_network_segmentation(self, size, colors):
@@ -511,8 +511,8 @@ class joint_training(generic_framework):
 
         self.ce = ce_nod+ce_ran
 
-        # total loss for joint training. Weight of 20 is to align different scales of ce and lossL2
-        self.total_loss = self.alpha * self.ce * 20 + (1-self.alpha) * self.loss_l2
+        # total loss for joint training. Weight of 50 is to align different scales of ce and lossL2
+        self.total_loss = self.alpha * self.ce * 50 + (1-self.alpha) * self.loss_l2
 
         ### optimizers
         # Train Reconstruction Only
@@ -598,6 +598,23 @@ class joint_training(generic_framework):
         for k in range(steps):
             y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
             self.sess.run(self.optimizer_seg,feed_dict={self.true: x_true, self.y: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+            if k % 20 == 0:
+                summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
+                                                         feed_dict={self.true: x_true, self.y: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+                print('Iteration: ' + str(iteration) + ', CE: ' + str(ce))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
+
+    def joint_training(self, steps):
+        for k in range(steps):
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
+            self.sess.run(self.optimizer,feed_dict={self.true: x_true, self.y: fbp,
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
