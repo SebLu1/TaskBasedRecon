@@ -577,7 +577,7 @@ class joint_training(generic_framework):
 
     def pretrain_segmentation_true_input(self, steps):
         for k in range(steps):
-            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data()
+            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size= self.batch_size)
             self.sess.run(self.optimizer_seg, feed_dict={self.segmentation: annos, self.ul_nod:ul_nod,
                                                          self.ul_ran: ul_rand, self.out: pics})
             if k % 20 == 0:
