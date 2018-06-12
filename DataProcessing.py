@@ -144,8 +144,7 @@ class LUNA(object):
             j = j+1
         return pic, vertices, nodules
 
-    def cut_data(self, pic, nodules, vertices):
-
+    def find_centre(self, vertices):
         # find the centre of the nodule
         x_min = 512
         x_max = 0
@@ -162,6 +161,12 @@ class LUNA(object):
                 y_max = coord[1]
         x_cen = int((x_min + x_max) / 2)
         y_cen = int((y_min + y_max) / 2)
+        return x_cen, y_cen
+
+    def cut_data(self, pic, nodules, vertices):
+
+        # find the centre of the nodule
+        x_cen, y_cen = self.find_centre(vertices)
 
         # cut out random patch around nodule and random patch somewhere
         j = 0
