@@ -459,8 +459,8 @@ class joint_training(generic_framework):
         ### the segmentation step
         self.segmentation = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
                                            dtype=tf.float32)
-        self.ul_nod = tf.placeholder(shape=[None, 2])
-        self.ul_ran = tf.placeholder(shape=[None, 2])
+        self.ul_nod = tf.placeholder(shape=[None, 2], dtype=tf.int32)
+        self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
 
         # slice the network output and segmentation using ul_nod and ul_ran
         self.pic_nod = extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
