@@ -83,6 +83,33 @@ class generic_framework(object):
             annos[k + batch_size, ..., 0] = nod_rand
         return pics, annos
 
+    def generate_raw_segmentation_data(self, batch_size, training_data=True):
+        pics = np.zeros((batch_size, 512, 512, 1), dtype='float32')
+        annos = np.zeros((batch_size, 512,512,1), dtype='float32')
+        ul_nod = np.zeros(shape=(batch_size, 2))
+        ul_rand = np.zeros(shape=(batch_size, 2))
+
+        for i in range(batch_size):
+            pic, vertices, nodules = self.data_pip.load_data(training_data=training_data)
+            pics[i, ..., 0] = pic[...]
+            annos[i,...,0] = nodules
+
+            # find corresponding upper left corners for cut out
+            x_cen, y_cen = self.data_pip.find_centre(vertices)
+            j = 0
+            upper_left = 0
+            lower_right = 512
+            while j < 100:
+                centre_nod = [x_cen, y_cen] + np.random.randint(-20, 21, size=2)
+                upper_left = centre_nod - 32
+                lower_right = centre_nod + 32
+                if upper_left[0] > 0 and upper_left[1] > 0 and lower_right[0] < 512 and lower_right[1] < 512:
+                    j = 100
+                j = j + 1
+            ul_nod[i,:] = upper_left
+            ul_rand[i,:]= np.random.randint(150, 314, size=2)
+        return pics, annos, ul_nod, ul_rand
+
     def generate_reconstruction_data(self, batch_size, training_data = True, noise_level = None):
         if noise_level == None:
             noise_level = self.noise_level
@@ -422,9 +449,9 @@ class joint_training(generic_framework):
     experiment_name = 'default_experiment'
 
     # learning rate for Adams
-    learning_rate = 0.0005
+    learning_rate = 0.0002
     # The batch size
-    batch_size = 16
+    batch_size = 4
     # Convex weight alpha trading off between L2 and CE loss for joint reconstruction
     alpha = 0
 
@@ -499,24 +526,29 @@ class joint_training(generic_framework):
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.total_loss,
                                                                              global_step=self.global_step)
 
-        # logging tools
+        ### logging tools
+
+        # collect summaries that are used for segmentation
+        sum_seg = []
+
         tf.summary.scalar('Loss_L2', self.loss_l2)
-        tf.summary.scalar('Loss_CE', self.ce)
+        sum_seg.append(tf.summary.scalar('Loss_CE', self.ce))
         tf.summary.scalar('Loss_total', self.total_loss)
         with tf.name_scope('Reconstruction'):
             tf.summary.image('FBP', self.y, max_outputs=1)
             tf.summary.image('Original', self.true, max_outputs=1)
             tf.summary.image('Reconstruction', self.out, max_outputs=1)
         with tf.name_scope('Nodule_detection'):
-            tf.summary.image('Nodule_pic', self.pic_nod, max_outputs=1)
-            tf.summary.image('Nodule_seg', self.seg_nod, max_outputs=1)
-            tf.summary.image('Nodule_out_seg', self.out_seg_nod, max_outputs=1)
+            sum_seg.append(tf.summary.image('Nodule_pic', self.pic_nod, max_outputs=1))
+            sum_seg.append(tf.summary.image('Nodule_seg', self.seg_nod, max_outputs=1))
+            sum_seg.append(tf.summary.image('Nodule_out_seg', self.out_seg_nod, max_outputs=1))
         with tf.name_scope('Non_Nodule_detection'):
-            tf.summary.image('Non-Nodule_pic', self.pic_ran, max_outputs=1)
-            tf.summary.image('Non-Nodule_seg', self.seg_ran, max_outputs=1)
-            tf.summary.image('Non-Nodule_out_seg', self.out_seg_ran, max_outputs=1)
+            sum_seg.append(tf.summary.image('Non-Nodule_pic', self.pic_ran, max_outputs=1))
+            sum_seg.append(tf.summary.image('Non-Nodule_seg', self.seg_ran, max_outputs=1))
+            sum_seg.append(tf.summary.image('Non-Nodule_out_seg', self.out_seg_ran, max_outputs=1))
 
         # set up the logger
+        self.merged_seg_only = tf.summary.merge(sum_seg)
         self.merged = tf.summary.merge_all()
         self.writer = tf.summary.FileWriter(self.path + 'Logs/',
                                             self.sess.graph)
@@ -544,4 +576,16 @@ class joint_training(generic_framework):
         self.save(self.global_step)
 
     def pretrain_segmentation_true_input(self, steps):
-        pass
+        for k in range(steps):
+            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data()
+            self.sess.run(self.optimizer_seg, feed_dict={self.segmentation: annos, self.ul_nod:ul_nod,
+                                                         self.ul_ran: ul_rand, self.out: pics})
+            if k % 20 == 0:
+                summary, iteration, loss = self.sess.run([self.merged_seg_only, self.global_step, self.ce],
+                                                         feed_dict={self.segmentation: annos, self.ul_nod: ul_nod,
+                                                                    self.ul_ran: ul_rand, self.out: pics})
+                print('Iteration: ' + str(iteration) + ', CE: ' + str(loss))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
