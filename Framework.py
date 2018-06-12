@@ -505,7 +505,7 @@ class joint_training(generic_framework):
             tf.summary.image('FBP', self.y, max_outputs=1)
             tf.summary.image('Original', self.true, max_outputs=1)
             tf.summary.image('Reconstruction', self.out, max_outputs=1)
-        with tf.name_scope('Nodule detection'):
+        with tf.name_scope('Nodule_detection'):
             tf.summary.image('Nodule_pic', self.pic_nod, max_outputs=1)
             tf.summary.image('Nodule_seg', self.seg_nod, max_outputs=1)
             tf.summary.image('Nodule_out_seg', self.out_seg_nod, max_outputs=1)
