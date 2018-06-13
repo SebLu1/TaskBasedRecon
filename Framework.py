@@ -455,9 +455,9 @@ class joint_training(generic_framework):
     # learning rate for Adams
     learning_rate = 0.00005
     # The batch size
-    batch_size = 4
+    batch_size = 8
     # evaluation batch size
-    eval_batch_size = 16
+    eval_batch_size = 8
     # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
     alpha = 0.7
 
