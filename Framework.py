@@ -456,6 +456,8 @@ class joint_training(generic_framework):
     learning_rate = 0.00005
     # The batch size
     batch_size = 4
+    # evaluation batch size
+    eval_batch_size = 16
     # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
     alpha = 0.7
 
@@ -569,6 +571,7 @@ class joint_training(generic_framework):
             self.sess.run(self.optimizer_recon, feed_dict={self.true: x_true,
                                                      self.y: fbp})
             if k % 20 == 0:
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False, noise_level=0.02)
                 summary, iteration, loss = self.sess.run([self.merged,self.global_step, self.loss_l2],
                                                          feed_dict={self.true: x_true, self.y: fbp,
                                                                     self.segmentation: annos,
@@ -585,6 +588,7 @@ class joint_training(generic_framework):
             self.sess.run(self.optimizer_seg, feed_dict={self.segmentation: annos, self.ul_nod:ul_nod,
                                                          self.ul_ran: ul_rand, self.out: pics})
             if k % 20 == 0:
+                pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.eval_batch_size, training_data=False)
                 summary, iteration, loss = self.sess.run([self.merged_seg_only, self.global_step, self.ce],
                                                          feed_dict={self.segmentation: annos, self.ul_nod: ul_nod,
                                                                     self.ul_ran: ul_rand, self.out: pics})
@@ -601,6 +605,8 @@ class joint_training(generic_framework):
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False,
+                                                                                     noise_level=0.02)
                 summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
                                                          feed_dict={self.true: x_true, self.y: fbp,
                                                                     self.segmentation: annos,
@@ -618,6 +624,8 @@ class joint_training(generic_framework):
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False,
+                                                                                     noise_level=0.02)
                 summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
                                                          feed_dict={self.true: x_true, self.y: fbp,
                                                                     self.segmentation: annos,

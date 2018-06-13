@@ -1,14 +1,14 @@
 from Framework import joint_training
 
-# jt = joint_training()
-#
-# for k in range(3):
-#     jt.pretrain_reconstruction(200)
-#
-# for k in range(5):
-#     jt.pretrain_segmentation_true_input(500)
+
 
 n = input('Number of experiment')
+
+if n==0:
+
+    jt = joint_training()
+    for k in range(5):
+        jt.pretrain_segmentation_true_input(500)
 
 if n==1:
 
