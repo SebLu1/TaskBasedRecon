@@ -31,7 +31,7 @@ if n ==2:
 
 
 if n ==3:
-    test_size = 1000
+    test_size = 100
 
     class joint_training_seg(joint_training):
         experiment_name = 'Pretrain_Seg_on_Reconstruction'
