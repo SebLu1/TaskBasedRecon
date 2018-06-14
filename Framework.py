@@ -671,21 +671,28 @@ class joint_training(generic_framework):
             y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size,
                                                                                  training_data=False,
                                                                                  noise_level=0.02)
-            iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
-                                                              self.seg_nod, self.out_seg_nod],
-                                                             feed_dict={self.true: x_true, self.fbp: fbp,
-                                                                        self.segmentation: annos,
-                                                                        self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+            if direct_feed:
+                iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
+                                                                  self.seg_nod, self.out_seg_nod],
+                                                                 feed_dict={self.true: x_true, self.fbp: fbp,
+                                                                            self.segmentation: annos,
+                                                                            self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+            else:
+                iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
+                                                                  self.seg_nod, self.out_seg_nod],
+                                                                 feed_dict={self.out: x_true,
+                                                                            self.segmentation: annos,
+                                                                            self.ul_nod: ul_nod, self.ul_ran: ul_rand})
             for j in range(self.eval_batch_size):
                 ### compute ce_1, ce_2 and ce_total
                 # CE loss for 1st order mistakes
                 segmentation_map1 = np.multiply(np.log(seg[j,...,0]), anno[j,...,0])
-                loss1 = - tf.reduce_mean(segmentation_map1)
+                loss1 = - np.average(segmentation_map1)
                 ce_1.append(loss1)
 
                 # CE loss for 2nd order mistakes
-                segmentation_map2 = tf.multiply(tf.log(1 - seg[j,...,0]), 1 - anno[j,...,0])
-                loss2 = - tf.reduce_mean(segmentation_map2)
+                segmentation_map2 = np.multiply(tf.log(1 - seg[j,...,0]), 1 - anno[j,...,0])
+                loss2 = - np.average(segmentation_map2)
                 ce_2.append(loss2)
 
                 # total loss
@@ -693,7 +700,7 @@ class joint_training(generic_framework):
 
                 ### compute the l2 loss
                 mistake = np.square(recon[j,...,0] - x_true[j,...,0])
-                l2.append(np.sqrt(np.average(mistake)))
+                l2.append(np.sqrt(np.sum(mistake)))
         return mean_var(ce_1), mean_var(ce_2), mean_var(ce_total), mean_var(l2)
 
 

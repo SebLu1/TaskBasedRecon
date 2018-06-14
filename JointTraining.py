@@ -38,10 +38,12 @@ if n ==3:
 
     net = joint_training_seg()
     ce1, ce2, ce_total, l2 = net.evaluate(test_size=test_size)
+    print(net.experiment_name)
     print(ce1)
     print(ce2)
     print(ce_total)
     print(l2)
+    net.end()
 
 
 
