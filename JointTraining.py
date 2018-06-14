@@ -28,3 +28,32 @@ if n ==2:
     print('Weighting parameter alpha:' + str(net.alpha))
     for k in range(5):
         net.joint_training(steps=200)
+
+
+if n ==3:
+    test_size = 1000
+
+    class joint_training_seg(joint_training):
+        experiment_name = 'Pretrain_Seg_on_Reconstruction'
+
+    net = joint_training_seg()
+    ce1, ce2, ce_total, l2 = net.evaluate(test_size=test_size)
+    print(ce1)
+    print(ce2)
+    print(ce_total)
+    print(l2)
+
+
+
+def comparison():
+    jt = joint_training()
+    y, x_true, fbp, annos, ul_nod, ul_rand = jt.generate_training_data(jt.batch_size, training_data=False,
+                                                                       noise_level=0.02)
+    recon = []
+    nod = []
+    anno = []
+    seg = []
+    r, n, anno, seg = jt.compute(y, x_true, fbp, annos, ul_nod, ul_rand)
+    jt.end()
+
+
