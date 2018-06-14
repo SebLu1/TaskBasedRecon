@@ -671,7 +671,7 @@ class joint_training(generic_framework):
             y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size,
                                                                                  training_data=False,
                                                                                  noise_level=0.02)
-            if direct_feed:
+            if not direct_feed:
                 iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
                                                                   self.seg_nod, self.out_seg_nod],
                                                                  feed_dict={self.true: x_true, self.fbp: fbp,
