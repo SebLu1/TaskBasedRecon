@@ -558,7 +558,7 @@ class joint_training(generic_framework):
         sum_seg.append(tf.summary.scalar('Loss_CE', self.ce))
         tf.summary.scalar('Loss_total', self.total_loss)
         with tf.name_scope('Reconstruction'):
-            tf.summary.image('FBP', self.y, max_outputs=1)
+            tf.summary.image('FBP', self.fbp, max_outputs=1)
             tf.summary.image('Original', self.true, max_outputs=1)
             tf.summary.image('Reconstruction', self.out, max_outputs=1)
         with tf.name_scope('Nodule_detection'):

@@ -49,11 +49,9 @@ def comparison():
     jt = joint_training()
     y, x_true, fbp, annos, ul_nod, ul_rand = jt.generate_training_data(jt.batch_size, training_data=False,
                                                                        noise_level=0.02)
-    recon = []
-    nod = []
-    anno = []
-    seg = []
     r, n, anno, seg = jt.compute(y, x_true, fbp, annos, ul_nod, ul_rand)
     jt.end()
+
+
 
 
