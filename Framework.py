@@ -691,7 +691,7 @@ class joint_training(generic_framework):
                 ce_1.append(loss1)
 
                 # CE loss for 2nd order mistakes
-                segmentation_map2 = np.multiply(tf.log(1 - seg[j,...,0]), 1 - anno[j,...,0])
+                segmentation_map2 = np.multiply(np.log(1 - seg[j,...,0]), 1 - anno[j,...,0])
                 loss2 = - np.average(segmentation_map2)
                 ce_2.append(loss2)
 
