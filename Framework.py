@@ -790,7 +790,7 @@ class joint_training_mal(generic_framework):
 
         ### the segmentation step
         self.segmentation = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1]],
-                                           dtype=tf.float32)
+                                           dtype=tf.int32)
         self.seg_ohl = tf.one_hot(self.segmentation, depth = self.channels)
         self.ul_nod = tf.placeholder(shape=[None, 2], dtype=tf.int32)
         self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
