@@ -70,15 +70,14 @@ if n ==4:
         jt.pretrain_segmentation_true_input(500)
     jt.end()
 
+### use malignancy prediction as well
+from Framework import joint_training_mal
 
-
-def comparison():
-    jt = joint_training()
-    y, x_true, fbp, annos, ul_nod, ul_rand = jt.generate_training_data(jt.batch_size, training_data=False,
-                                                                       noise_level=0.02)
-    r, n, anno, seg = jt.compute(y, x_true, fbp, annos, ul_nod, ul_rand)
+if n ==5:
+    jt= joint_training_mal()
+    for k in range(5):
+        jt.pretrain_segmentation_true_input(200)
     jt.end()
-
 
 
 

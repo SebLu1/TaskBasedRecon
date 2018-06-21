@@ -21,6 +21,7 @@ from DataProcessing import LUNA
 from Networks import binary_classifier
 from Networks import fully_convolutional
 from Networks import UNet_segmentation
+from Networks import UNet_multiple_classes
 from Networks import UNet
 
 
@@ -47,7 +48,6 @@ class generic_framework(object):
         self.data_pip = self.get_Data_pip()
         self.colors = 1
         self.image_size = (512,512)
-        self.network = self.get_network(self.image_size, self.colors)
         self.model = self.get_model(self.image_size)
         self.image_space = self.model.get_image_size()
         self.measurement_space = self.model.get_measurement_size()
@@ -133,10 +133,10 @@ class generic_framework(object):
     def generate_training_data_mel(self, batch_size, training_data=True, noise_level = None):
         if noise_level == None:
             noise_level = self.noise_level
-        y = np.zeros((batch_size, self.measurement_space[0], self.measurement_space[1], 1), dtype='float32')
-        x_true = np.zeros((batch_size, 512, 512, 1), dtype='float32')
-        fbp = np.zeros((batch_size, 512, 512, 1), dtype='float32')
-        annos = np.zeros((batch_size, 512,512,1), dtype='float32')
+        y = np.zeros((batch_size, self.measurement_space[0], self.measurement_space[1]), dtype='float32')
+        x_true = np.zeros((batch_size, 512, 512), dtype='float32')
+        fbp = np.zeros((batch_size, 512, 512), dtype='float32')
+        annos = np.zeros((batch_size, 512,512), dtype='float32')
         ul_nod = np.zeros(shape=(batch_size, 2))
         ul_rand = np.zeros(shape=(batch_size, 2))
 
@@ -147,10 +147,10 @@ class generic_framework(object):
             # add white Gaussian noise
             noisy_data = data + np.random.normal(size = self.measurement_space) * noise_level * np.average(np.abs(data))
 
-            fbp [i, ..., 0] = self.model.inverse(noisy_data)
-            x_true[i, ..., 0] = pic[...]
-            y[i, ..., 0] = noisy_data
-            annos[i,...,0] = nodules
+            fbp [i, ...] = self.model.inverse(noisy_data)
+            x_true[i, ...] = pic[...]
+            y[i, ...] = noisy_data
+            annos[i,...] = nodules
 
             # find corresponding upper left corners for cut out
             x_cen, y_cen = self.data_pip.find_centre(vertices)
@@ -436,9 +436,9 @@ class postprocessing(generic_framework):
 ### bunch of methods that come in handy later
 # method to slice in tensorflow
 def extract_tensor(tensor, ul, batch_size, size = (64,64)):
-    extract = tf.expand_dims(tf.expand_dims(tensor[0,ul[0,0]:ul[0,0]+size[0],ul[0,1]:ul[0,1]+size[1],0], axis=0), axis=3)
+    extract = tf.expand_dims(tensor[0,ul[0,0]:ul[0,0]+size[0],ul[0,1]:ul[0,1]+size[1],:], axis=0)
     for k in range(1, batch_size):
-        new_slice = tf.expand_dims(tf.expand_dims(tensor[0,ul[k,0]:ul[k,0]+size[0],ul[k,1]:ul[k,1]+size[1],0], axis=0), axis=3)
+        new_slice = tf.expand_dims(tensor[k,ul[k,0]:ul[k,0]+size[0],ul[k,1]:ul[k,1]+size[1],:], axis=0)
         extract = tf.concat([extract, new_slice], axis=0)
     return extract
 
@@ -710,21 +710,21 @@ class joint_training(generic_framework):
         return mean_var(ce_1), mean_var(ce_2), mean_var(ce_total), mean_var(l2)
 
 class joint_training_mal(generic_framework):
-    model_name = 'Postprocessing_mal'
+    model_name = 'Postprocessing_Mal'
     experiment_name = 'default_experiment'
 
+    # channels in the segmentation
+    channels = 6
     # learning rate for Adams
-    learning_rate = 0.0002
+    learning_rate = 0.000025
     # The batch size
-    batch_size = 8
-    # evaluation batch size
-    eval_batch_size = 8
+    batch_size = 2
     # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
     alpha = 0.7
 
     # methods to define the models used in framework
-    def get_network_segmentation(self, size, colors):
-        return UNet_segmentation(size=size, colors=colors)
+    def get_network_segmentation(self, channels):
+        return UNet_multiple_classes(channels=channels)
 
     def get_Data_pip(self):
         return LUNA()
@@ -735,42 +735,75 @@ class joint_training_mal(generic_framework):
     def get_network(self, size, colors):
         return fully_convolutional(size=size, colors=colors)
 
+    def vis_seg(self, seg):
+        weights = tf.constant([[0]])
+        for k in range(1,self.channels):
+            ad = tf.constant([[k]])
+            weights = tf.concat(weights, ad, axis=0)
+        return tf.tensordot(seg, weights, axes=[[-1],[0]])
+
+    def segment(self, pic, ohl, name):
+        with tf.variable_scope('Segmentation'):
+            out_seg= self.segmenter.net(pic)
+
+        weight_non_nod = tf.constant([[0.05]])
+        class_weighting = tf.concat(weight_non_nod, tf.ones(shape=[self.channels, 1]), axis = 0)
+        location_weight = tf.tensordot(ohl, class_weighting, axes=[[3], [0]])
+
+        raw_ce = tf.nn.softmax_cross_entropy_with_logits(ohl, out_seg)
+        weighted_ce = tf.multiply(raw_ce, location_weight)
+        ce = tf.reduce_mean(weighted_ce)
+
+        # visualization of segmentation
+        seg = self.vis_seg(tf.nn.softmax(ohl, axis=-1))
+        seg_net = self.vis_seg(out_seg)
+
+        # the tensorboard logging
+        with tf.name_scope(name):
+            self.sum_seg.append(tf.summary.image('Image', pic, max_outputs=1))
+            self.sum_seg.append(tf.summary.image('Annotation', seg, max_outputs=1))
+            self.sum_seg.append(tf.summary.image('Segmentation',seg_net, max_outputs=1))
+
+        return ce
+
+
     def __init__(self):
         # call superclass init
-        super(joint_training, self).__init__()
-        self.segmenter = self.get_network_segmentation(self.image_size, self.colors)
+        super(joint_training_mal, self).__init__()
+        self.network = self.get_network(size = self.image_size, colors = self.colors)
+        self.segmenter = self.get_network_segmentation(self.channels)
+
+        # logging list
+        self.sum_seg = []
 
         ### the reconstruction step
-        self.true = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+        self.true = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1]],
                                    dtype=tf.float32)
-        self.fbp = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+        self.fbp = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1]],
                                 dtype=tf.float32)
         # network output
         with tf.variable_scope('Reconstruction'):
-            self.out = self.network.net(self.fbp)
+            self.out = self.network.net(tf.expand_dims(self.fbp, axis = 3))
         # compute loss
-        data_mismatch = tf.square(self.out - self.true)
+        data_mismatch = tf.square(self.out - tf.expand_dims(self.true, axis = 3))
         self.loss_l2 = tf.reduce_mean(tf.sqrt(tf.reduce_sum(data_mismatch, axis=(1, 2, 3))))
 
         ### the segmentation step
-        self.segmentation = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+        self.segmentation = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1]],
                                            dtype=tf.float32)
+        self.seg_ohl = tf.one_hot(self.segmentation, depth = self.channels)
         self.ul_nod = tf.placeholder(shape=[None, 2], dtype=tf.int32)
         self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
 
-        # slice the network output and segmentation using ul_nod and ul_ran
-        self.pic_nod = extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
-        self.seg_nod = extract_tensor(self.segmentation, self.ul_nod, batch_size=self.batch_size)
+        # segmentation of patch containing nodule
+        pic_nod = extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
+        seg_nod = extract_tensor(self.seg_ohl, self.ul_nod, batch_size=self.batch_size)
+        ce_nod = self.segment(pic_nod, seg_nod, name='Nodule')
 
-        self.pic_ran = extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
-        self.seg_ran = extract_tensor(self.segmentation, self.ul_ran, batch_size=self.batch_size)
-
-        with tf.variable_scope('Segmentation'):
-            self.out_seg_nod = self.segmenter.net(self.pic_nod)
-            self.out_seg_ran = self.segmenter.net(self.pic_ran)
-
-        ce_nod = CE(self.out_seg_nod, self.seg_nod, weight=20)
-        ce_ran = CE(self.out_seg_ran, self.seg_ran, weight=20)
+        # segmentation of random patch
+        pic_ran = extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
+        seg_ran = extract_tensor(self.seg_ohl, self.ul_ran, batch_size=self.batch_size)
+        ce_ran = self.segment(pic_ran, seg_ran, name='Random')
 
         self.ce = ce_nod+ce_ran
 
@@ -794,28 +827,16 @@ class joint_training_mal(generic_framework):
                                                                              global_step=self.global_step)
 
         ### logging tools
-
-        # collect summaries that are used for segmentation
-        sum_seg = []
-
         tf.summary.scalar('Loss_L2', self.loss_l2)
-        sum_seg.append(tf.summary.scalar('Loss_CE', self.ce))
+        self.sum_seg.append(tf.summary.scalar('Loss_CE', self.ce))
         tf.summary.scalar('Loss_total', self.total_loss)
         with tf.name_scope('Reconstruction'):
             tf.summary.image('FBP', self.fbp, max_outputs=1)
             tf.summary.image('Original', self.true, max_outputs=1)
             tf.summary.image('Reconstruction', self.out, max_outputs=1)
-        with tf.name_scope('Nodule_detection'):
-            sum_seg.append(tf.summary.image('Nodule_pic', self.pic_nod, max_outputs=1))
-            sum_seg.append(tf.summary.image('Nodule_seg', self.seg_nod, max_outputs=1))
-            sum_seg.append(tf.summary.image('Nodule_out_seg', self.out_seg_nod, max_outputs=1))
-        with tf.name_scope('Non_Nodule_detection'):
-            sum_seg.append(tf.summary.image('Non-Nodule_pic', self.pic_ran, max_outputs=1))
-            sum_seg.append(tf.summary.image('Non-Nodule_seg', self.seg_ran, max_outputs=1))
-            sum_seg.append(tf.summary.image('Non-Nodule_out_seg', self.out_seg_ran, max_outputs=1))
 
         # set up the logger
-        self.merged_seg_only = tf.summary.merge(sum_seg)
+        self.merged_seg_only = tf.summary.merge(self.sum_seg)
         self.merged = tf.summary.merge_all()
         self.writer = tf.summary.FileWriter(self.path + 'Logs/',
                                             self.sess.graph)
@@ -849,7 +870,7 @@ class joint_training_mal(generic_framework):
             self.sess.run(self.optimizer_seg, feed_dict={self.segmentation: annos, self.ul_nod:ul_nod,
                                                          self.ul_ran: ul_rand, self.out: pics})
             if k % 20 == 0:
-                pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.eval_batch_size, training_data=False)
+                pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size, training_data=False)
                 summary, iteration, loss = self.sess.run([self.merged_seg_only, self.global_step, self.ce],
                                                          feed_dict={self.segmentation: annos, self.ul_nod: ul_nod,
                                                                     self.ul_ran: ul_rand, self.out: pics})
@@ -927,7 +948,7 @@ class joint_training_mal(generic_framework):
                                                                  feed_dict={self.out: x_true,
                                                                             self.segmentation: annos,
                                                                             self.ul_nod: ul_nod, self.ul_ran: ul_rand})
-            for j in range(self.eval_batch_size):
+            for j in range(self.batch_size):
                 ### compute ce_1, ce_2 and ce_total
                 # CE loss for 1st order mistakes
                 segmentation_map1 = np.multiply(np.log(seg[j,...,0]), anno[j,...,0])
