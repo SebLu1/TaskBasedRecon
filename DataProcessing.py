@@ -84,18 +84,18 @@ class LUNA(object):
                 nodules = docs[randint(0, len(docs) - 1)].findall('{http://www.nih.gov}unblindedReadNodule')
                 if len(nodules) > 0:
                     nod = nodules[randint(0, len(nodules) - 1)]
-                    # get melignancy
-                    char = nod.findall('{http://www.nih.gov}characteristics')
-                    if char:
-                        mel = int(char[0].find('{http://www.nih.gov}malignancy').text)
-                    else:
-                        print('No melignancy info found!')
                     # get the annotation map
                     slices = nod.findall('{http://www.nih.gov}roi')
                     slice = slices[randint(0, len(slices) - 1)]
                     z_position = float(slice[0].text)
                     id = slice[1].text
                     if len(slice.findall('{http://www.nih.gov}edgeMap')) > 10:
+                        # get melignancy
+                        char = nod.findall('{http://www.nih.gov}characteristics')
+                        if char:
+                            mel = int(char[0].find('{http://www.nih.gov}malignancy').text)
+                        else:
+                            print('No melignancy info found!')
                         # read out annotation map of chosen nodule
                         annotations = np.zeros(shape=(512, 512))
                         nodules = np.zeros(shape=(512, 512))

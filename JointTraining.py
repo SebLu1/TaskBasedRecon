@@ -73,6 +73,9 @@ if n ==4:
 ### use malignancy prediction as well
 from Framework import joint_training_mal
 
+jt = joint_training_mal()
+jt.pretrain_segmentation_reconstruction_input(100)
+
 
 
 

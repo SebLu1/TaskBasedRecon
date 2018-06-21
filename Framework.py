@@ -172,7 +172,7 @@ class generic_framework(object):
 
         return y, x_true, fbp, annos, ul_nod, ul_rand, mel
 
-    def generate_training_data(self, batch_size, training_data = True, noise_level= None, scaled = False):
+    def generate_training_data(self, batch_size, training_data = True, noise_level= None, scaled = True):
         y, x_true, fbp, annos, ul_nod, ul_rand, mel = self.generate_training_data_mel(batch_size, training_data, noise_level)
         if scaled:
             annos = annos * mel
@@ -737,22 +737,23 @@ class joint_training_mal(generic_framework):
         return fully_convolutional(size=size, colors=colors)
 
     def vis_seg(self, seg):
-        weights = tf.constant([[0]])
-        for k in range(1,self.channels):
-            ad = tf.constant([[k]])
+        seg_fl = tf.cast(seg, tf.float32)
+        weights = tf.constant([[0]], dtype=tf.float32)
+        for k in range(1, self.channels):
+            ad = tf.constant([[k]], dtype=tf.float32)
             weights = tf.concat([weights, ad], axis=0)
-        return tf.tensordot(seg, weights, axes=[[-1],[0]])
+        return tf.tensordot(seg_fl, weights, axes=[[-1],[0]])
 
     def segment(self, pic, ohl, name):
         with tf.variable_scope('Segmentation'):
             out_seg= self.segmenter.net(pic)
 
         weight_non_nod = tf.constant([[0.05]])
-        class_weighting = tf.concat([weight_non_nod], tf.ones(shape=[self.channels, 1]), axis = 0)
+        class_weighting = tf.concat([weight_non_nod, tf.ones(shape=[self.channels-1, 1])], axis = 0)
         location_weight = tf.tensordot(ohl, class_weighting, axes=[[3], [0]])
 
-        raw_ce = tf.nn.softmax_cross_entropy_with_logits(ohl, out_seg)
-        weighted_ce = tf.multiply(raw_ce, location_weight)
+        raw_ce = tf.nn.softmax_cross_entropy_with_logits(labels=ohl, logits=out_seg)
+        weighted_ce = tf.multiply(tf.expand_dims(raw_ce, axis=3), location_weight)
         ce = tf.reduce_mean(weighted_ce)
 
         # visualization of segmentation
@@ -888,10 +889,10 @@ class joint_training_mal(generic_framework):
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
-                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False,
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, training_data=False,
                                                                                      noise_level=0.02)
                 summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
-                                                         feed_dict={self.true: x_true, self.y: fbp,
+                                                         feed_dict={self.true: x_true, self.fbp: fbp,
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
                 print('Iteration: ' + str(iteration) + ', CE: ' + str(ce))
@@ -907,7 +908,7 @@ class joint_training_mal(generic_framework):
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
-                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False,
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, training_data=False,
                                                                                      noise_level=0.02)
                 summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
                                                          feed_dict={self.true: x_true, self.fbp: fbp,
