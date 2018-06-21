@@ -11,6 +11,7 @@ class joint_training_seg(joint_training):
 class fully_joint_training(joint_training):
     experiment_name = 'Joint_Training'
 
+
 if n==0:
 
     jt = joint_training()
@@ -61,6 +62,13 @@ if n ==3:
     print(ce_total)
     print(l2)
     net.end()
+
+### massive joint run
+if n ==4:
+    jt = joint_training()
+    for k in range(10):
+        jt.pretrain_segmentation_true_input(500)
+    jt.end()
 
 
 

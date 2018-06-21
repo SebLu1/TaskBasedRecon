@@ -130,7 +130,7 @@ class generic_framework(object):
             y[i, ..., 0] = noisy_data
         return y, x_true, fbp
 
-    def generate_training_data(self, batch_size, training_data=True, noise_level = None):
+    def generate_training_data_mel(self, batch_size, training_data=True, noise_level = None):
         if noise_level == None:
             noise_level = self.noise_level
         y = np.zeros((batch_size, self.measurement_space[0], self.measurement_space[1], 1), dtype='float32')
@@ -141,7 +141,7 @@ class generic_framework(object):
         ul_rand = np.zeros(shape=(batch_size, 2))
 
         for i in range(batch_size):
-            pic, vertices, nodules = self.data_pip.load_data(training_data=training_data)
+            pic, vertices, nodules, mel = self.data_pip.load_data_mel(training_data=training_data)
             data = self.model.forward_operator(pic)
 
             # add white Gaussian noise
@@ -167,6 +167,14 @@ class generic_framework(object):
             ul_nod[i,:] = upper_left
             ul_rand[i,:]= np.random.randint(150, 314, size=2)
 
+            # check if the random patch includes a nodule
+
+        return y, x_true, fbp, annos, ul_nod, ul_rand, mel
+
+    def generate_training_data(self, batch_size, training_data = True, noise_level= None, scaled = False):
+        y, x_true, fbp, annos, ul_nod, ul_rand, mel = self.generate_training_data_mel(batch_size, training_data, noise_level)
+        if scaled:
+            annos = annos * mel
         return y, x_true, fbp, annos, ul_nod, ul_rand
 
 
@@ -447,7 +455,7 @@ def CE(tensor1, tensor2, weight):
     # total loss
     return (weight * loss1 + loss2)
 
-# method that computes the average and variance of a list numbers
+# method that computes the average and variance of a list of numbers
 def mean_var(list):
     mean  = 0
     n = float(len(list)-1)
@@ -463,14 +471,12 @@ def mean_var(list):
 
     return mean, var
 
-
-
 class joint_training(generic_framework):
     model_name = 'JointTraining_PostPr'
     experiment_name = 'default_experiment'
 
     # learning rate for Adams
-    learning_rate = 0.00005
+    learning_rate = 0.0002
     # The batch size
     batch_size = 8
     # evaluation batch size
@@ -703,6 +709,242 @@ class joint_training(generic_framework):
                 l2.append(np.sqrt(np.sum(mistake)))
         return mean_var(ce_1), mean_var(ce_2), mean_var(ce_total), mean_var(l2)
 
+class joint_training_mal(generic_framework):
+    model_name = 'Postprocessing_mal'
+    experiment_name = 'default_experiment'
 
+    # learning rate for Adams
+    learning_rate = 0.0002
+    # The batch size
+    batch_size = 8
+    # evaluation batch size
+    eval_batch_size = 8
+    # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
+    alpha = 0.7
+
+    # methods to define the models used in framework
+    def get_network_segmentation(self, size, colors):
+        return UNet_segmentation(size=size, colors=colors)
+
+    def get_Data_pip(self):
+        return LUNA()
+
+    def get_model(self, size):
+        return ct(size=size)
+
+    def get_network(self, size, colors):
+        return fully_convolutional(size=size, colors=colors)
+
+    def __init__(self):
+        # call superclass init
+        super(joint_training, self).__init__()
+        self.segmenter = self.get_network_segmentation(self.image_size, self.colors)
+
+        ### the reconstruction step
+        self.true = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+                                   dtype=tf.float32)
+        self.fbp = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+                                dtype=tf.float32)
+        # network output
+        with tf.variable_scope('Reconstruction'):
+            self.out = self.network.net(self.fbp)
+        # compute loss
+        data_mismatch = tf.square(self.out - self.true)
+        self.loss_l2 = tf.reduce_mean(tf.sqrt(tf.reduce_sum(data_mismatch, axis=(1, 2, 3))))
+
+        ### the segmentation step
+        self.segmentation = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1], self.data_pip.colors],
+                                           dtype=tf.float32)
+        self.ul_nod = tf.placeholder(shape=[None, 2], dtype=tf.int32)
+        self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
+
+        # slice the network output and segmentation using ul_nod and ul_ran
+        self.pic_nod = extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
+        self.seg_nod = extract_tensor(self.segmentation, self.ul_nod, batch_size=self.batch_size)
+
+        self.pic_ran = extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
+        self.seg_ran = extract_tensor(self.segmentation, self.ul_ran, batch_size=self.batch_size)
+
+        with tf.variable_scope('Segmentation'):
+            self.out_seg_nod = self.segmenter.net(self.pic_nod)
+            self.out_seg_ran = self.segmenter.net(self.pic_ran)
+
+        ce_nod = CE(self.out_seg_nod, self.seg_nod, weight=20)
+        ce_ran = CE(self.out_seg_ran, self.seg_ran, weight=20)
+
+        self.ce = ce_nod+ce_ran
+
+        # total loss for joint training. Weight of 50 is to align different scales of ce and lossL2
+        self.total_loss = self.alpha * self.ce * 50 + (1-self.alpha) * self.loss_l2
+
+        ### optimizers
+        # Train Reconstruction Only
+        rec_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Reconstruction')
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.optimizer_recon = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss_l2,
+                                                                             global_step=self.global_step,
+                                                                             var_list=rec_var)
+        # Train Segmentation Only
+        seg_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Segmentation')
+        self.optimizer_seg = tf.train.AdamOptimizer(self.learning_rate).minimize(self.ce,
+                                                                             global_step=self.global_step,
+                                                                             var_list=seg_var)
+        # Train everything
+        self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.total_loss,
+                                                                             global_step=self.global_step)
+
+        ### logging tools
+
+        # collect summaries that are used for segmentation
+        sum_seg = []
+
+        tf.summary.scalar('Loss_L2', self.loss_l2)
+        sum_seg.append(tf.summary.scalar('Loss_CE', self.ce))
+        tf.summary.scalar('Loss_total', self.total_loss)
+        with tf.name_scope('Reconstruction'):
+            tf.summary.image('FBP', self.fbp, max_outputs=1)
+            tf.summary.image('Original', self.true, max_outputs=1)
+            tf.summary.image('Reconstruction', self.out, max_outputs=1)
+        with tf.name_scope('Nodule_detection'):
+            sum_seg.append(tf.summary.image('Nodule_pic', self.pic_nod, max_outputs=1))
+            sum_seg.append(tf.summary.image('Nodule_seg', self.seg_nod, max_outputs=1))
+            sum_seg.append(tf.summary.image('Nodule_out_seg', self.out_seg_nod, max_outputs=1))
+        with tf.name_scope('Non_Nodule_detection'):
+            sum_seg.append(tf.summary.image('Non-Nodule_pic', self.pic_ran, max_outputs=1))
+            sum_seg.append(tf.summary.image('Non-Nodule_seg', self.seg_ran, max_outputs=1))
+            sum_seg.append(tf.summary.image('Non-Nodule_out_seg', self.out_seg_ran, max_outputs=1))
+
+        # set up the logger
+        self.merged_seg_only = tf.summary.merge(sum_seg)
+        self.merged = tf.summary.merge_all()
+        self.writer = tf.summary.FileWriter(self.path + 'Logs/',
+                                            self.sess.graph)
+
+        # initialize Variables
+        tf.global_variables_initializer().run()
+
+        # load existing saves
+        self.load()
+
+    def pretrain_reconstruction(self, steps):
+        for k in range(steps):
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
+            self.sess.run(self.optimizer_recon, feed_dict={self.true: x_true,
+                                                     self.fbp: fbp})
+            if k % 20 == 0:
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False, noise_level=0.02)
+                summary, iteration, loss = self.sess.run([self.merged,self.global_step, self.loss_l2],
+                                                         feed_dict={self.true: x_true, self.y: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+                print('Iteration: ' + str(iteration) + ', MSE: ' + str(loss))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
+
+    def pretrain_segmentation_true_input(self, steps):
+        for k in range(steps):
+            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size= self.batch_size)
+            self.sess.run(self.optimizer_seg, feed_dict={self.segmentation: annos, self.ul_nod:ul_nod,
+                                                         self.ul_ran: ul_rand, self.out: pics})
+            if k % 20 == 0:
+                pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.eval_batch_size, training_data=False)
+                summary, iteration, loss = self.sess.run([self.merged_seg_only, self.global_step, self.ce],
+                                                         feed_dict={self.segmentation: annos, self.ul_nod: ul_nod,
+                                                                    self.ul_ran: ul_rand, self.out: pics})
+                print('Iteration: ' + str(iteration) + ', CE: ' + str(loss))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
+
+    def pretrain_segmentation_reconstruction_input(self, steps):
+        for k in range(steps):
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
+            self.sess.run(self.optimizer_seg,feed_dict={self.true: x_true, self.fbp: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+            if k % 20 == 0:
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False,
+                                                                                     noise_level=0.02)
+                summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
+                                                         feed_dict={self.true: x_true, self.y: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+                print('Iteration: ' + str(iteration) + ', CE: ' + str(ce))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
+
+    def joint_training(self, steps):
+        for k in range(steps):
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02)
+            self.sess.run(self.optimizer,feed_dict={self.true: x_true, self.fbp: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+            if k % 20 == 0:
+                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size, training_data=False,
+                                                                                     noise_level=0.02)
+                summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
+                                                         feed_dict={self.true: x_true, self.fbp: fbp,
+                                                                    self.segmentation: annos,
+                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
+                print('Iteration: ' + str(iteration) + ', CE: ' + str(ce))
+
+                # logging has to be adopted
+                self.writer.add_summary(summary, iteration)
+        self.save(self.global_step)
+
+    def compute(self, y, x_true, fbp, annos, ul_nod, ul_rand ):
+        iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
+                                                                       self.seg_nod, self.out_seg_nod],
+                                               feed_dict={self.true: x_true, self.fbp: fbp,
+                                                          self.segmentation: annos,
+                                                          self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+        return recon, nod, anno, seg
+
+    # method to compute the average CE and L2 error and their variances
+    def evaluate(self, test_size, direct_feed = False):
+        ce_1 = []
+        ce_2 = []
+        ce_total = []
+        l2 = []
+        for k in range(int(test_size/16)):
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.eval_batch_size,
+                                                                                 training_data=False,
+                                                                                 noise_level=0.02)
+            if not direct_feed:
+                iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
+                                                                  self.seg_nod, self.out_seg_nod],
+                                                                 feed_dict={self.true: x_true, self.fbp: fbp,
+                                                                            self.segmentation: annos,
+                                                                            self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+            else:
+                iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
+                                                                  self.seg_nod, self.out_seg_nod],
+                                                                 feed_dict={self.out: x_true,
+                                                                            self.segmentation: annos,
+                                                                            self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+            for j in range(self.eval_batch_size):
+                ### compute ce_1, ce_2 and ce_total
+                # CE loss for 1st order mistakes
+                segmentation_map1 = np.multiply(np.log(seg[j,...,0]), anno[j,...,0])
+                loss1 = - np.average(segmentation_map1)
+                ce_1.append(loss1)
+
+                # CE loss for 2nd order mistakes
+                segmentation_map2 = np.multiply(np.log(1 - seg[j,...,0]), 1 - anno[j,...,0])
+                loss2 = - np.average(segmentation_map2)
+                ce_2.append(loss2)
+
+                # total loss
+                ce_total.append((20 * loss1 + loss2))
+
+                ### compute the l2 loss
+                mistake = np.square(recon[j,...,0] - x_true[j,...,0])
+                l2.append(np.sqrt(np.sum(mistake)))
+        return mean_var(ce_1), mean_var(ce_2), mean_var(ce_total), mean_var(l2)
 
 

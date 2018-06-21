@@ -158,11 +158,12 @@ def upsampling_block(tensor, name, filters, reuse, kernel = [5,5]):
         return upsample
 
 class UNet_segmentation(object):
-    def __init__(self, size, colors, parameter_sharing = True):
+    def __init__(self, size, colors, softmax = True, parameter_sharing = True):
         self.colors = colors
         self.size = size
         self.parameter_sharing = parameter_sharing
         self.used = False
+        self.softmax = softmax
 
     def raw_net(self, input, reuse):
         # same shape conv
@@ -200,10 +201,15 @@ class UNet_segmentation(object):
         post1 = tf.layers.conv2d(inputs=con4, filters=16, kernel_size=[5, 5],
                                   padding="same", name='post1',
                                   reuse=reuse,  activation=tf.nn.relu)
+        if self.softmax:
+            post2 = tf.layers.conv2d(inputs=post1, filters=1, kernel_size=[5, 5],
+                                      padding="same", name='post2',
+                                      reuse=reuse,  activation=bin_softmax)
+        else:
+            post2 = tf.layers.conv2d(inputs=post1, filters=1, kernel_size=[5, 5],
+                                      padding="same", name='post2',
+                                      reuse=reuse)
 
-        post2 = tf.layers.conv2d(inputs=post1, filters=1, kernel_size=[5, 5],
-                                  padding="same", name='post2',
-                                  reuse=reuse,  activation=bin_softmax)
         return post2
 
     def net(self, input):

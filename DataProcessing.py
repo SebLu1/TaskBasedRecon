@@ -71,6 +71,7 @@ class LUNA(object):
         z_position = 0
         annotations = np.zeros(shape=(512, 512))
         nodules = np.zeros(shape=(512, 512))
+        mel = 0
         while j < 1000:
             if training_data:
                 xml_path = self.xml_training_list[randint(0, self.xml_training_list_length - 1)]
@@ -83,6 +84,13 @@ class LUNA(object):
                 nodules = docs[randint(0, len(docs) - 1)].findall('{http://www.nih.gov}unblindedReadNodule')
                 if len(nodules) > 0:
                     nod = nodules[randint(0, len(nodules) - 1)]
+                    # get melignancy
+                    char = nod.findall('{http://www.nih.gov}characteristics')
+                    if char:
+                        mel = int(char[0].find('{http://www.nih.gov}malignancy').text)
+                    else:
+                        print('No melignancy info found!')
+                    # get the annotation map
                     slices = nod.findall('{http://www.nih.gov}roi')
                     slice = slices[randint(0, len(slices) - 1)]
                     z_position = float(slice[0].text)
@@ -111,15 +119,15 @@ class LUNA(object):
                             nodules = annotations
                             print('Polygone filling failed. Draw new nodule')
             j = j + 1
-        return xml_path, id, z_position, nodules, vertices
+        return xml_path, id, z_position, nodules, vertices, mel
 
 
 
     # get a 64^2 patch picture
-    def load_data(self, training_data = True):
+    def load_data_mel(self, training_data = True):
         j = 0
         while j < 1000:
-            xml_path, id, z_position, nodules, vertices = self.get_nodule_annotation(training_data=training_data)
+            xml_path, id, z_position, nodules, vertices, mel = self.get_nodule_annotation(training_data=training_data)
             # find image in path_list that fits the z position and id of the chosen nodule
             k = -1
             while (not xml_path[k] == '/') and k > -1000:
@@ -142,6 +150,10 @@ class LUNA(object):
                 pic = self.normalize(pic)
                 j = 1000
             j = j+1
+        return pic, vertices, nodules, mel
+
+    def load_data(self, training_data = True):
+        pic, vertices, nodules, mel = self.load_data_mel(training_data=training_data)
         return pic, vertices, nodules
 
     def find_centre(self, vertices):
