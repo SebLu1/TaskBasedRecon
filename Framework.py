@@ -51,6 +51,7 @@ class generic_framework(object):
         self.model = self.get_model(self.image_size)
         self.image_space = self.model.get_image_size()
         self.measurement_space = self.model.get_measurement_size()
+        self.network = self.get_network(size=self.image_size, colors=self.colors)
 
 
         # finding the correct path for saving models
@@ -739,7 +740,7 @@ class joint_training_mal(generic_framework):
         weights = tf.constant([[0]])
         for k in range(1,self.channels):
             ad = tf.constant([[k]])
-            weights = tf.concat(weights, ad, axis=0)
+            weights = tf.concat([weights, ad], axis=0)
         return tf.tensordot(seg, weights, axes=[[-1],[0]])
 
     def segment(self, pic, ohl, name):
@@ -747,7 +748,7 @@ class joint_training_mal(generic_framework):
             out_seg= self.segmenter.net(pic)
 
         weight_non_nod = tf.constant([[0.05]])
-        class_weighting = tf.concat(weight_non_nod, tf.ones(shape=[self.channels, 1]), axis = 0)
+        class_weighting = tf.concat([weight_non_nod], tf.ones(shape=[self.channels, 1]), axis = 0)
         location_weight = tf.tensordot(ohl, class_weighting, axes=[[3], [0]])
 
         raw_ce = tf.nn.softmax_cross_entropy_with_logits(ohl, out_seg)
