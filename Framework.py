@@ -237,7 +237,7 @@ class postprocessing(generic_framework):
         ce = tf.reduce_mean(weighted_ce)
 
         # visualization of segmentation
-        seg = self.vis_seg(tf.nn.softmax(ohl, axis=-1))
+        seg = self.vis_seg(tf.nn.softmax(ohl))
         seg_net = self.vis_seg(out_seg)
 
         # the tensorboard logging
