@@ -211,6 +211,13 @@ class LUNA(object):
         ul_nod, ul_ran = LUNA.get_corner(vertices)
         return pic, nodules, ul_nod, ul_ran, mel
 
+    # read out the x and y coordinate from xml file and return it as tuple
+    @staticmethod
+    def get_xy(knot):
+        x = int(knot.find('x').text)
+        y = int(knot.find('y').text)
+        return (x,y)
+
     # loads specified image plus annotation from source file
     def load_from_source(self, id):
         document = ET.parse(self.source_path+'standard_eval.xml')
@@ -223,36 +230,13 @@ class LUNA(object):
 
         mel = int(nodule.find('mal').text)
         pic = self.load_dcm(nodule.find('dcm_path').text)
-        ul_nod = np.zeros(shape=[2])
-        ul_ran = np.zeros(shape=[2])
+        ul_nod = LUNA.get_xy(nodule.find('ul_nod'))
+        ul_ran = LUNA.get_xy(nodule.find('ul_ran'))
         return pic, nodules, ul_nod, ul_ran, mel
 
-
+    # cuts out the 64^2 patch from given image with specified upper left corner coordinates
     @staticmethod
-    def cut_data(pic, nodules, vertices):
-
-        # find the centre of the nodule
-        x_cen, y_cen = LUNA.find_centre(vertices)
-
-        # cut out random patch around nodule and random patch somewhere
-        j = 0
-        upper_left = 0
-        lower_right = 512
-        while j < 100:
-            centre_nod = [x_cen, y_cen] + np.random.randint(-20, 21, size=2)
-            upper_left = centre_nod - 32
-            lower_right = centre_nod + 32
-            if upper_left[0] > 0 and upper_left[1] > 0 and lower_right[0] < 512 and lower_right[1] < 512:
-                j = 100
-            j = j + 1
-        # cut out image nodule
+    def cut_data(pic, upper_left):
         pic_cut = pic[upper_left[0]:upper_left[0] + 64, upper_left[1]:upper_left[1] + 64]
-        nod_cut = nodules[upper_left[0]:upper_left[0] + 64, upper_left[1]:upper_left[1] + 64]
-
-        # cut out random batch
-        random_ul = np.random.randint(150, 314, size=2)
-        pic_rand = pic[random_ul[0]:random_ul[0] + 64, random_ul[1]:random_ul[1] + 64]
-        nod_rand = nodules[random_ul[0]:random_ul[0] + 64, random_ul[1]:random_ul[1] + 64]
-
-        return pic_cut, nod_cut, pic_rand, nod_rand
+        return pic_cut
 
