@@ -80,15 +80,15 @@ class generic_framework(object):
 
         for i in range(batch_size):
             if from_source:
-                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_from_source(id=((i % 8)+1))
+                pic, nodules, ul_n, ul_r, mel = self.data_pip.load_from_source(id=((i % 8)+1))
             else:
-                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
+                pic, nodules, ul_n, ul_r, mel = self.data_pip.load_data(training_data=training_data)
             pics[i, ...,0] = pic
             if scaled:
                 nodules = nodules * mel
             annos[i,...] = nodules
-            ul_nod[i,:] = ul_nod
-            ul_rand[i,:]= ul_ran
+            ul_nod[i,:] = ul_n
+            ul_rand[i,:]= ul_r
         return pics, annos, ul_nod, ul_rand
 
     def generate_training_data(self, batch_size, training_data=True, noise_level=None, scaled=True, from_source=False):
@@ -103,9 +103,9 @@ class generic_framework(object):
 
         for i in range(batch_size):
             if from_source:
-                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_from_source(id=((i % 8)+1))
+                pic, nodules, ul_n, ul_r, mel = self.data_pip.load_from_source(id=((i % 8)+1))
             else:
-                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
+                pic, nodules, ul_n, ul_r, mel = self.data_pip.load_data(training_data=training_data)
             data = self.model.forward_operator(pic)
 
             # add white Gaussian noise
@@ -117,8 +117,8 @@ class generic_framework(object):
             if scaled:
                 nodules = nodules * mel
             annos[i,...] = nodules
-            ul_nod[i,:] = ul_nod
-            ul_rand[i,:]= ul_ran
+            ul_nod[i,:] = ul_n
+            ul_rand[i,:]= ul_r
 
         return y, x_true, fbp, annos, ul_nod, ul_rand
 
