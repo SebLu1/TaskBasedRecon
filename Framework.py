@@ -232,7 +232,7 @@ class postprocessing(generic_framework):
         class_weighting = tf.concat([weight_non_nod, tf.ones(shape=[self.channels-1, 1])], axis = 0)
         location_weight = tf.tensordot(ohl, class_weighting, axes=[[3], [0]])
 
-        raw_ce = tf.nn.softmax_cross_entropy_with_logits_v2(labels=ohl, logits=out_seg)
+        raw_ce = tf.nn.softmax_cross_entropy_with_logits(labels=ohl, logits=out_seg)
         weighted_ce = tf.multiply(tf.expand_dims(raw_ce, axis=3), location_weight)
         ce = tf.reduce_mean(weighted_ce)
 
