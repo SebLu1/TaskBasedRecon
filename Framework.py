@@ -32,6 +32,9 @@ class generic_framework(object):
     # set the noise level used for experiments
     noise_level = 0.02
 
+    # channels in the segmentation
+    channels = 6
+
     # methods to define the models used in framework
     def get_network(self, size, colors):
         return fully_convolutional(size=size, colors=colors)
@@ -60,8 +63,8 @@ class generic_framework(object):
             path_prefix=''
         elif name == 'motel':
             path_prefix='/local/scratch/public/sl767/TaskBasedRecon/'
-        self.path = path_prefix+'Saves/{}/{}/{}/{}/'.format(self.model.name, self.data_pip.name, self.model_name, self.experiment_name)
-        self.default_path = path_prefix+'Saves/{}/{}/{}/default_experiment/'.format(self.model.name, self.data_pip.name, self.model_name)
+        self.path = path_prefix+'Saves/Noise_Level_{}/Channels_{}/{}/{}/'.format(self.noise_level, self.channels, self.model_name, self.experiment_name)
+        self.default_path = path_prefix+'Saves/Noise_Level_{}/Channels_{}/{}/default_experiment/'.format(self.noise_level, self.channels, self.model_name)
         # start tensorflow sesssion
         self.sess = tf.InteractiveSession()
 
@@ -69,14 +72,17 @@ class generic_framework(object):
         self.generate_folders()
 
 
-    def generate_raw_segmentation_data(self, batch_size, training_data=True, scaled = True):
+    def generate_raw_segmentation_data(self, batch_size, training_data=True, scaled=True, from_source=False):
         pics = np.zeros((batch_size, 512, 512,1), dtype='float32')
         annos = np.zeros((batch_size, 512,512), dtype='float32')
         ul_nod = np.zeros(shape=(batch_size, 2))
         ul_rand = np.zeros(shape=(batch_size, 2))
 
         for i in range(batch_size):
-            pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
+            if from_source:
+                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_from_source(id=((i % 8)+1))
+            else:
+                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
             pics[i, ...,0] = pic
             if scaled:
                 nodules = nodules * mel
@@ -85,8 +91,8 @@ class generic_framework(object):
             ul_rand[i,:]= ul_ran
         return pics, annos, ul_nod, ul_rand
 
-    def generate_training_data(self, batch_size, training_data=True, noise_level = None, scaled = True):
-        if noise_level == None:
+    def generate_training_data(self, batch_size, training_data=True, noise_level=None, scaled=True, from_source=False):
+        if noise_level is None:
             noise_level = self.noise_level
         y = np.zeros((batch_size, self.measurement_space[0], self.measurement_space[1],1), dtype='float32')
         x_true = np.zeros((batch_size, 512, 512,1), dtype='float32')
@@ -96,13 +102,16 @@ class generic_framework(object):
         ul_rand = np.zeros(shape=(batch_size, 2))
 
         for i in range(batch_size):
-            pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
+            if from_source:
+                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_from_source(id=((i % 8)+1))
+            else:
+                pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
             data = self.model.forward_operator(pic)
 
             # add white Gaussian noise
             noisy_data = data + np.random.normal(size = self.measurement_space) * noise_level * np.average(np.abs(data))
 
-            fbp [i, ...,0] = self.model.inverse(noisy_data)
+            fbp[i, ...,0] = self.model.inverse(noisy_data)
             x_true[i, ...,0] = pic
             y[i, ...,0] = noisy_data
             if scaled:
@@ -168,8 +177,8 @@ def mean_var(list):
 
     return mean, var
 
-class joint_training(generic_framework):
-    model_name = 'Postprocessing_Mal'
+class postprocessing(generic_framework):
+    model_name = 'Postprocessing'
     experiment_name = 'default_experiment'
 
     # channels in the segmentation
@@ -179,9 +188,11 @@ class joint_training(generic_framework):
     # learning rate for Adams
     learning_rate = 0.000025
     # The batch size
-    batch_size = 2
+    batch_size = 4
     # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
     alpha = 0.7
+    # fix the noise level
+    noise_level = 0.02
 
     # some static methods that can come in handy
     @staticmethod
@@ -240,7 +251,7 @@ class joint_training(generic_framework):
 
     def __init__(self):
         # call superclass init
-        super(joint_training, self).__init__()
+        super(postprocessing, self).__init__()
         self.network = self.get_network(size = self.image_size, colors = self.colors)
         self.segmenter = self.get_network_segmentation(self.channels)
 
@@ -267,13 +278,13 @@ class joint_training(generic_framework):
         self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
 
         # segmentation of patch containing nodule
-        pic_nod = extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
-        seg_nod = extract_tensor(self.seg_ohl, self.ul_nod, batch_size=self.batch_size)
+        pic_nod = self.extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
+        seg_nod = self.extract_tensor(self.seg_ohl, self.ul_nod, batch_size=self.batch_size)
         ce_nod = self.segment(pic_nod, seg_nod, name='Nodule')
 
         # segmentation of random patch
-        pic_ran = extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
-        seg_ran = extract_tensor(self.seg_ohl, self.ul_ran, batch_size=self.batch_size)
+        pic_ran = self.extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
+        seg_ran = self.extract_tensor(self.seg_ohl, self.ul_ran, batch_size=self.batch_size)
         ce_ran = self.segment(pic_ran, seg_ran, name='Random')
 
         self.ce = ce_nod+ce_ran
@@ -309,30 +320,60 @@ class joint_training(generic_framework):
         # set up the logger
         self.merged_seg_only = tf.summary.merge(self.sum_seg)
         self.merged = tf.summary.merge_all()
-        self.writer = tf.summary.FileWriter(self.path + 'Logs/',
+        self.writer_random = tf.summary.FileWriter(self.path + 'Logs/random/',
                                             self.sess.graph)
-
+        self.writer_static = tf.summary.FileWriter(self.path + 'Logs/fixed/',
+                                            self.sess.graph)
         # initialize Variables
         tf.global_variables_initializer().run()
 
         # load existing saves
         self.load()
 
+    def log(self, direct_feed = False):
+        if direct_feed:
+            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size,
+                                                                               scaled=self.scaled, from_source=True)
+            summary, iteration, loss = self.sess.run([self.merged_seg_only, self.global_step, self.ce],
+                                                     feed_dict={self.segmentation: annos, self.ul_nod: ul_nod,
+                                                                self.ul_ran: ul_rand, self.out: pics})
+            self.writer_static.add_summary(summary, iteration)
+            print('Iteration: ' + str(iteration) + ', CE: ' + str(loss))
+            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size,
+                                                                               training_data= False,
+                                                                               scaled=self.scaled, from_source=False)
+            summary, iteration = self.sess.run([self.merged_seg_only, self.global_step],
+                                                     feed_dict={self.segmentation: annos, self.ul_nod: ul_nod,
+                                                                self.ul_ran: ul_rand, self.out: pics})
+            self.writer_random.add_summary(summary, iteration)
+        else:
+            # evaluate on the same samples all the time
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level,
+                                                                                 scaled=self.scaled, from_source=True)
+            summary, iteration, ce, mse = self.sess.run([self.merged, self.global_step, self.ce, self.loss_l2],
+                                                   feed_dict={self.true: x_true, self.fbp: fbp,
+                                                              self.segmentation: annos,
+                                                              self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+            self.writer_static.add_summary(summary, iteration)
+            print('Iteration: ' + str(iteration) + ', CE: ' + str(ce) + ', MSE: ' +str(mse))
+
+            # evaluate on random samples
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, training_data=False,
+                                                                                 noise_level=self.noise_level,
+                                                                                 scaled=self.scaled, from_source=False)
+            summary, iteration= self.sess.run([self.merged, self.global_step],
+                                                   feed_dict={self.true: x_true, self.fbp: fbp,
+                                                              self.segmentation: annos,
+                                                              self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+            self.writer_random.add_summary(summary, iteration)
+
     def pretrain_reconstruction(self, steps):
         for k in range(steps):
-            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02, scaled=self.scaled)
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level, scaled=self.scaled)
             self.sess.run(self.optimizer_recon, feed_dict={self.true: x_true,
                                                      self.fbp: fbp})
             if k % 20 == 0:
-                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, training_data=False, noise_level=0.02, scaled=self.scaled)
-                summary, iteration, loss = self.sess.run([self.merged,self.global_step, self.loss_l2],
-                                                         feed_dict={self.true: x_true, self.fbp: fbp,
-                                                                    self.segmentation: annos,
-                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
-                print('Iteration: ' + str(iteration) + ', MSE: ' + str(loss))
-
-                # logging has to be adopted
-                self.writer.add_summary(summary, iteration)
+                self.log()
         self.save(self.global_step)
 
     def pretrain_segmentation_true_input(self, steps):
@@ -341,52 +382,27 @@ class joint_training(generic_framework):
             self.sess.run(self.optimizer_seg, feed_dict={self.segmentation: annos, self.ul_nod:ul_nod,
                                                          self.ul_ran: ul_rand, self.out: pics})
             if k % 20 == 0:
-                pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size, training_data=False, scaled=self.scaled)
-                summary, iteration, loss = self.sess.run([self.merged_seg_only, self.global_step, self.ce],
-                                                         feed_dict={self.segmentation: annos, self.ul_nod: ul_nod,
-                                                                    self.ul_ran: ul_rand, self.out: pics})
-                print('Iteration: ' + str(iteration) + ', CE: ' + str(loss))
-
-                # logging has to be adopted
-                self.writer.add_summary(summary, iteration)
+                self.log(direct_feed=True)
         self.save(self.global_step)
 
     def pretrain_segmentation_reconstruction_input(self, steps):
         for k in range(steps):
-            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02, scaled=self.scaled)
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level, scaled=self.scaled)
             self.sess.run(self.optimizer_seg,feed_dict={self.true: x_true, self.fbp: fbp,
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
-                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, training_data=False,
-                                                                                     noise_level=0.02, scaled=self.scaled)
-                summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
-                                                         feed_dict={self.true: x_true, self.fbp: fbp,
-                                                                    self.segmentation: annos,
-                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
-                print('Iteration: ' + str(iteration) + ', CE: ' + str(ce))
-
-                # logging has to be adopted
-                self.writer.add_summary(summary, iteration)
+                self.log()
         self.save(self.global_step)
 
     def joint_training(self, steps):
         for k in range(steps):
-            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=0.02, scaled=self.scaled)
+            y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level, scaled=self.scaled)
             self.sess.run(self.optimizer,feed_dict={self.true: x_true, self.fbp: fbp,
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
-                y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, training_data=False,
-                                                                                     noise_level=0.02, scaled=self.scaled)
-                summary, iteration, ce = self.sess.run([self.merged,self.global_step, self.ce],
-                                                         feed_dict={self.true: x_true, self.fbp: fbp,
-                                                                    self.segmentation: annos,
-                                                                    self.ul_nod:ul_nod, self.ul_ran: ul_rand})
-                print('Iteration: ' + str(iteration) + ', CE: ' + str(ce))
-
-                # logging has to be adopted
-                self.writer.add_summary(summary, iteration)
+                self.log()
         self.save(self.global_step)
 
     # def compute(self, y, x_true, fbp, annos, ul_nod, ul_rand ):
