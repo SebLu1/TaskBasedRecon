@@ -31,7 +31,7 @@ class LUNA(object):
         else:
             Train_Path = '/local/scratch/public/sl767/LUNA/Training_Data'
             Eval_Path = '/local/scratch/public/sl767/LUNA/Evaluation_Data'
-            self.source_path = '/local/scratch/public/sl767/LUNA/Standard_Eval'
+            self.source_path = '/local/scratch/public/sl767/LUNA/Standard_Eval/'
         # List the existing training data
         self.training_list = ut.find('*.dcm', Train_Path)
         self.training_list_length = len(self.training_list)
