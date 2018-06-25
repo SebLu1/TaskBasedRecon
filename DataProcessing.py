@@ -122,39 +122,42 @@ class LUNA(object):
         return xml_path, id, z_position, nodules, vertices, mel
 
 
+    def load_dcm(self, path):
+        dc_file = dc.read_file(path)
+        pic = dc_file.pixel_array
+        pic = self.normalize(pic)
+        return pic
+
+    # find dcm path of image that fits the z position and id of the chosen nodule
+    def find_dcm_path(self, xml_path, id, z_position):
+        k = -1
+        while (not xml_path[k] == '/') and k > -1000:
+            k = k - 1
+        last_number = len(xml_path) + k
+        cut_path = xml_path[0:last_number]
+        path_list = ut.find('*dcm', cut_path)
+        path = ''
+
+        for im_path in path_list:
+            dc_file = dc.read_file(im_path)
+            image_z = (dc_file[0x0020, 0x0032].value)[2]
+            image_id = dc_file[0x0008, 0x0018].value
+            if image_id == id and image_z == z_position:
+                path = im_path
+
+        return path
 
     # get a 64^2 patch picture
     def load_data_mel(self, training_data = True):
         j = 0
         while j < 1000:
             xml_path, id, z_position, nodules, vertices, mel = self.get_nodule_annotation(training_data=training_data)
-            # find image in path_list that fits the z position and id of the chosen nodule
-            k = -1
-            while (not xml_path[k] == '/') and k > -1000:
-                k = k - 1
-            last_number = len(xml_path) + k
-            cut_path = xml_path[0:last_number]
-            path_list = ut.find('*dcm', cut_path)
-            path = ''
-
-            for im_path in path_list:
-                dc_file = dc.read_file(im_path)
-                image_z = (dc_file[0x0020, 0x0032].value)[2]
-                image_id = dc_file[0x0008, 0x0018].value
-                if image_id == id and image_z == z_position:
-                    path = im_path
-
+            path = self.find_dcm_path(xml_path, id, z_position)
             if not path == '':
-                dc_file = dc.read_file(path)
-                pic = dc_file.pixel_array
-                pic = self.normalize(pic)
+                pic = self.load_dcm(path)
                 j = 1000
             j = j+1
         return pic, vertices, nodules, mel
-
-    def load_data(self, training_data = True):
-        pic, vertices, nodules, mel = self.load_data_mel(training_data=training_data)
-        return pic, vertices, nodules
 
     def find_centre(self, vertices):
         # find the centre of the nodule
