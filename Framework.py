@@ -18,7 +18,6 @@ import util as ut
 
 from forward_models import ct
 from DataProcessing import LUNA
-from Networks import binary_classifier
 from Networks import fully_convolutional
 from Networks import UNet_segmentation
 from Networks import UNet_multiple_classes
@@ -35,7 +34,7 @@ class generic_framework(object):
 
     # methods to define the models used in framework
     def get_network(self, size, colors):
-        return binary_classifier(size=size, colors=colors)
+        return fully_convolutional(size=size, colors=colors)
 
     def get_Data_pip(self):
         return LUNA()
@@ -77,26 +76,13 @@ class generic_framework(object):
         ul_rand = np.zeros(shape=(batch_size, 2))
 
         for i in range(batch_size):
-            pic, vertices, nodules, mel = self.data_pip.load_data_mel(training_data=training_data)
+            pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
             pics[i, ...,0] = pic
             if scaled:
                 nodules = nodules * mel
             annos[i,...] = nodules
-
-            # find corresponding upper left corners for cut out
-            x_cen, y_cen = self.data_pip.find_centre(vertices)
-            j = 0
-            upper_left = 0
-            lower_right = 512
-            while j < 100:
-                centre_nod = [x_cen, y_cen] + np.random.randint(-20, 21, size=2)
-                upper_left = centre_nod - 32
-                lower_right = centre_nod + 32
-                if upper_left[0] > 0 and upper_left[1] > 0 and lower_right[0] < 512 and lower_right[1] < 512:
-                    j = 100
-                j = j + 1
-            ul_nod[i,:] = upper_left
-            ul_rand[i,:]= np.random.randint(150, 314, size=2)
+            ul_nod[i,:] = ul_nod
+            ul_rand[i,:]= ul_ran
         return pics, annos, ul_nod, ul_rand
 
     def generate_training_data(self, batch_size, training_data=True, noise_level = None, scaled = True):
@@ -110,7 +96,7 @@ class generic_framework(object):
         ul_rand = np.zeros(shape=(batch_size, 2))
 
         for i in range(batch_size):
-            pic, vertices, nodules, mel = self.data_pip.load_data_mel(training_data=training_data)
+            pic, nodules, ul_nod, ul_ran, mel = self.data_pip.load_data(training_data=training_data)
             data = self.model.forward_operator(pic)
 
             # add white Gaussian noise
@@ -122,23 +108,8 @@ class generic_framework(object):
             if scaled:
                 nodules = nodules * mel
             annos[i,...] = nodules
-
-            # find corresponding upper left corners for cut out
-            x_cen, y_cen = self.data_pip.find_centre(vertices)
-            j = 0
-            upper_left = 0
-            lower_right = 512
-            while j < 100:
-                centre_nod = [x_cen, y_cen] + np.random.randint(-20, 21, size=2)
-                upper_left = centre_nod - 32
-                lower_right = centre_nod + 32
-                if upper_left[0] > 0 and upper_left[1] > 0 and lower_right[0] < 512 and lower_right[1] < 512:
-                    j = 100
-                j = j + 1
-            ul_nod[i,:] = upper_left
-            ul_rand[i,:]= np.random.randint(150, 314, size=2)
-
-            # check if the random patch includes a nodule
+            ul_nod[i,:] = ul_nod
+            ul_rand[i,:]= ul_ran
 
         return y, x_true, fbp, annos, ul_nod, ul_rand
 
