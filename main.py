@@ -18,7 +18,7 @@ class Exp1(postprocessing):
 if n == 0:
     net = Exp1()
     for k in range(10):
-        net.pretrain_segmentation_true_input(200)
+        net.pretrain_segmentation_true_input(500)
 
 
 
