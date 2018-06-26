@@ -242,9 +242,9 @@ class postprocessing(generic_framework):
 
         # the tensorboard logging
         with tf.name_scope(name):
-            self.sum_seg.append(tf.summary.image('Image', pic))
-            self.sum_seg.append(tf.summary.image('Annotation', seg))
-            self.sum_seg.append(tf.summary.image('Segmentation',seg_net))
+            self.sum_seg.append(tf.summary.image('Image', pic, max_outputs=2))
+            self.sum_seg.append(tf.summary.image('Annotation', seg, max_outputs=2))
+            self.sum_seg.append(tf.summary.image('Segmentation',seg_net, max_outputs=2))
 
         return ce
 
