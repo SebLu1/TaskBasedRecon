@@ -110,14 +110,15 @@ class LUNA(object):
                     z_position = float(slice[0].text)
                     id = slice[1].text
                     if len(slice.findall('{http://www.nih.gov}edgeMap')) > 10:
+                        # read out annotation map of chosen nodule
+                        annotations, nodules, vertices, error = LUNA.fill_nodule(slice.findall('{http://www.nih.gov}edgeMap'))
                         # get melignancy
                         char = nod.findall('{http://www.nih.gov}characteristics')
                         if char:
                             mel = int(char[0].find('{http://www.nih.gov}malignancy').text)
                         else:
                             print('No melignancy info found!')
-                        # read out annotation map of chosen nodule
-                        annotations, nodules, vertices, error = LUNA.fill_nodule(slice.findall('{http://www.nih.gov}edgeMap'))
+                            error = True
                         if not error:
                             j = 1000
             j = j + 1
