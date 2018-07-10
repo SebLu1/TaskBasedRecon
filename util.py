@@ -16,8 +16,8 @@ from scipy.misc import imresize
 import platform
 from skimage.measure import compare_ssim as ssim
 
-def softmax(logits, axis):
-    return tf.exp(logits) / tf.reduce_sum(tf.exp(logits), axis)
+def softmax(logits):
+    return tf.exp(logits) / tf.expand_dims(tf.reduce_sum(tf.exp(logits), axis=3), axis=3)
 
 def cut_image(pic):
     pic = np.maximum(pic, 0.0)
