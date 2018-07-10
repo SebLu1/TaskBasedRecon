@@ -146,9 +146,12 @@ class generic_framework(object):
         if os.listdir(self.path+'Data/'):
             saver.restore(self.sess, tf.train.latest_checkpoint(self.path+'Data/'))
             print('Save restored')
-        elif os.listdir(self.default_path+'Data/'):
-            saver.restore(self.sess, tf.train.latest_checkpoint(self.default_path+'Data/'))
-            print('Default Save restored')
+        elif os.path.exists(self.default_path+'Data/'):
+                if os.listdir(self.default_path+'Data/'):
+                    saver.restore(self.sess, tf.train.latest_checkpoint(self.default_path+'Data/'))
+                    print('Default Save restored')
+                else:
+                    print('No save found')
         else:
             print('No save found')
 
