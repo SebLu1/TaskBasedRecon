@@ -33,6 +33,18 @@ if n == 1:
     for k in range(10):
         net.pretrain_segmentation_true_input(500)
 
+class Exp3(postprocessing):
+    experiment_name = 'controlExperimentCropping'
+    channels = 2
+    scaled = False
+    learning_rate = 0.0003
+    batch_size = 4
+    noise_level = 0.02
+
+if n == 2:
+    net = Exp3()
+    for k in range(10):
+        net.pretrain_segmentation_true_input_precropped(500)
 
 
 

@@ -237,15 +237,15 @@ class postprocessing(generic_framework):
         ce = tf.reduce_mean(weighted_ce)
 
         # visualization of segmentation
-        seg = self.vis_seg(tf.nn.softmax(ohl))
-        seg_net = self.vis_seg(out_seg)
+        seg = self.vis_seg(ohl)
+        seg_net = self.vis_seg(tf.nn.softmax(out_seg, axis=(1, 2, 3)))
 
         # the tensorboard logging
         with tf.name_scope(name):
             self.sum_seg.append(tf.summary.image('Image', pic, max_outputs=2))
             self.sum_seg.append(tf.summary.image('Annotation', seg, max_outputs=2))
             self.sum_seg.append(tf.summary.image('Segmentation',seg_net, max_outputs=2))
-
+            self.sum_seg.append(tf.summary.image('Weight_map', location_weight, max_outputs=2))
         return ce
 
 
@@ -278,14 +278,14 @@ class postprocessing(generic_framework):
         self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
 
         # segmentation of patch containing nodule
-        pic_nod = self.extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
-        seg_nod = self.extract_tensor(self.seg_ohl, self.ul_nod, batch_size=self.batch_size)
-        ce_nod = self.segment(pic_nod, seg_nod, name='Nodule')
+        self.pic_nod = self.extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
+        self.seg_nod = self.extract_tensor(self.seg_ohl, self.ul_nod, batch_size=self.batch_size)
+        ce_nod = self.segment(self.pic_nod, self.seg_nod, name='Nodule')
 
         # segmentation of random patch
-        pic_ran = self.extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
-        seg_ran = self.extract_tensor(self.seg_ohl, self.ul_ran, batch_size=self.batch_size)
-        ce_ran = self.segment(pic_ran, seg_ran, name='Random')
+        self.pic_ran = self.extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
+        self.seg_ran = self.extract_tensor(self.seg_ohl, self.ul_ran, batch_size=self.batch_size)
+        ce_ran = self.segment(self.pic_ran, self.seg_ran, name='Random')
 
         self.ce = ce_nod+ce_ran
 
@@ -384,6 +384,27 @@ class postprocessing(generic_framework):
             if k % 20 == 0:
                 self.log(direct_feed=True)
         self.save(self.global_step)
+
+    def pretrain_segmentation_true_input_precropped(self, steps):
+        for k in range(steps):
+            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size,
+                                                                               scaled=self.scaled)
+            pic_nod = LUNA.cut_data(pics, ul_nod)
+            pic_ran = LUNA.cut_data(pics, ul_rand)
+
+            anno_nod = LUNA.cut_data(annos, ul_nod)
+            anno_ran = LUNA.cut_data(annos, ul_rand)
+
+            self.sess.run(self.optimizer_seg, feed_dict={self.pic_nod: pic_nod, self.pic_ran: pic_ran,
+                                                         self.seg_nod: anno_nod, self.seg_ran: anno_ran})
+
+            if k%20 == 0:
+                self.log(direct_feed=True)
+        self.save(self.global_step)
+
+
+
+
 
     def pretrain_segmentation_reconstruction_input(self, steps):
         for k in range(steps):
