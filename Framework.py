@@ -392,6 +392,8 @@ class postprocessing(generic_framework):
         for k in range(steps):
             pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size,
                                                                                scaled=self.scaled)
+            ul_nod = ul_nod.astype(int)
+            ul_rand = ul_rand.astype(int)
             pic_nod = LUNA.cut_data(pics, ul_nod)
             pic_ran = LUNA.cut_data(pics, ul_rand)
 
