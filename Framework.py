@@ -238,7 +238,7 @@ class postprocessing(generic_framework):
 
         # visualization of segmentation
         seg = self.vis_seg(ohl)
-        seg_net = self.vis_seg(tf.nn.softmax(out_seg, dim=(1, 2, 3)))
+        seg_net = self.vis_seg(ut.softmax(out_seg, axis=(1, 2, 3)))
 
         # the tensorboard logging
         with tf.name_scope(name):
