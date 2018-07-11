@@ -388,28 +388,24 @@ class postprocessing(generic_framework):
                 self.log(direct_feed=True)
         self.save(self.global_step)
 
-    def pretrain_segmentation_true_input_precropped(self, steps):
-        for k in range(steps):
-            pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size,
-                                                                               scaled=self.scaled)
-            ul_nod = ul_nod.astype(int)
-            ul_rand = ul_rand.astype(int)
-            pic_nod = LUNA.cut_data(pics, ul_nod)
-            pic_ran = LUNA.cut_data(pics, ul_rand)
-
-            anno_nod = LUNA.cut_data(annos, ul_nod)
-            anno_ran = LUNA.cut_data(annos, ul_rand)
-
-            self.sess.run(self.optimizer_seg, feed_dict={self.pic_nod: pic_nod, self.pic_ran: pic_ran,
-                                                         self.seg_nod: anno_nod, self.seg_ran: anno_ran})
-
-            if k%20 == 0:
-                self.log(direct_feed=True)
-        self.save(self.global_step)
-
-
-
-
+    # def pretrain_segmentation_true_input_precropped(self, steps):
+    #     for k in range(steps):
+    #         pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size,
+    #                                                                            scaled=self.scaled)
+    #         ul_nod = ul_nod.astype(int)
+    #         ul_rand = ul_rand.astype(int)
+    #         pic_nod = LUNA.cut_data(pics, ul_nod)
+    #         pic_ran = LUNA.cut_data(pics, ul_rand)
+    #
+    #         anno_nod = LUNA.cut_data(annos, ul_nod)
+    #         anno_ran = LUNA.cut_data(annos, ul_rand)
+    #
+    #         self.sess.run(self.optimizer_seg, feed_dict={self.pic_nod: pic_nod, self.pic_ran: pic_ran,
+    #                                                      self.seg_nod: anno_nod, self.seg_ran: anno_ran})
+    #
+    #         if k%20 == 0:
+    #             self.log(direct_feed=True)
+    #     self.save(self.global_step)
 
     def pretrain_segmentation_reconstruction_input(self, steps):
         for k in range(steps):
