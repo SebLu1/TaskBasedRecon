@@ -19,10 +19,7 @@ import util as ut
 from forward_models import ct
 from DataProcessing import LUNA
 from Networks import fully_convolutional
-from Networks import UNet_segmentation
 from Networks import UNet_multiple_classes
-from Networks import UNet
-
 
 # This class provides methods necessary
 class generic_framework(object):
@@ -219,6 +216,9 @@ class postprocessing(generic_framework):
     def get_network(self, size, colors):
         return fully_convolutional(size=size, colors=colors)
 
+    def reconstruction_model(self, y, fbp):
+        return self.network.net(fbp)
+
     def vis_seg(self, seg):
         seg_fl = tf.cast(seg, tf.float32)
         weights = tf.constant([[0]], dtype=tf.float32)
@@ -266,9 +266,12 @@ class postprocessing(generic_framework):
                                    dtype=tf.float32)
         self.fbp = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1],1],
                                 dtype=tf.float32)
+        self.y = tf.placeholder(shape=[None, self.measurement_space[0], self.measurement_space[1], 1],
+                                dtype=tf.float32)
+
         # network output
         with tf.variable_scope('Reconstruction'):
-            self.out = self.network.net(self.fbp)
+            self.out = self.reconstruction_model(self.y, self.fbp)
         # compute loss
         data_mismatch = tf.square(self.out - self.true)
         self.loss_l2 = tf.reduce_mean(tf.sqrt(tf.reduce_sum(data_mismatch, axis=(1, 2, 3))))
@@ -354,7 +357,7 @@ class postprocessing(generic_framework):
             y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level,
                                                                                  scaled=self.scaled, from_source=True)
             summary, iteration, ce, mse = self.sess.run([self.merged, self.global_step, self.ce, self.loss_l2],
-                                                   feed_dict={self.true: x_true, self.fbp: fbp,
+                                                   feed_dict={self.true: x_true, self.fbp: fbp, self.y: y,
                                                               self.segmentation: annos,
                                                               self.ul_nod: ul_nod, self.ul_ran: ul_rand})
             self.writer_static.add_summary(summary, iteration)
@@ -365,7 +368,7 @@ class postprocessing(generic_framework):
                                                                                  noise_level=self.noise_level,
                                                                                  scaled=self.scaled, from_source=False)
             summary, iteration= self.sess.run([self.merged, self.global_step],
-                                                   feed_dict={self.true: x_true, self.fbp: fbp,
+                                                   feed_dict={self.true: x_true, self.fbp: fbp, self.y: y,
                                                               self.segmentation: annos,
                                                               self.ul_nod: ul_nod, self.ul_ran: ul_rand})
             self.writer_random.add_summary(summary, iteration)
@@ -374,7 +377,7 @@ class postprocessing(generic_framework):
         for k in range(steps):
             y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level, scaled=self.scaled)
             self.sess.run(self.optimizer_recon, feed_dict={self.true: x_true,
-                                                     self.fbp: fbp})
+                                                     self.fbp: fbp, self.y: y})
             if k % 20 == 0:
                 self.log()
         self.save(self.global_step)
@@ -410,7 +413,7 @@ class postprocessing(generic_framework):
     def pretrain_segmentation_reconstruction_input(self, steps):
         for k in range(steps):
             y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level, scaled=self.scaled)
-            self.sess.run(self.optimizer_seg,feed_dict={self.true: x_true, self.fbp: fbp,
+            self.sess.run(self.optimizer_seg,feed_dict={self.true: x_true, self.fbp: fbp, self.y: y,
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
@@ -420,7 +423,7 @@ class postprocessing(generic_framework):
     def joint_training(self, steps):
         for k in range(steps):
             y, x_true, fbp, annos, ul_nod, ul_rand = self.generate_training_data(self.batch_size, noise_level=self.noise_level, scaled=self.scaled)
-            self.sess.run(self.optimizer,feed_dict={self.true: x_true, self.fbp: fbp,
+            self.sess.run(self.optimizer,feed_dict={self.true: x_true, self.fbp: fbp, self.y: y,
                                                                     self.segmentation: annos,
                                                                     self.ul_nod:ul_nod, self.ul_ran: ul_rand})
             if k % 20 == 0:
@@ -435,5 +438,24 @@ class postprocessing(generic_framework):
     #                                                       self.ul_nod: ul_nod, self.ul_ran: ul_rand})
     #     return recon, nod, anno, seg
 
+
+class iterative_gradient_desc(postprocessing):
+    model_name = 'LearnedGD'
+    recursions = 4
+
+    # take a leightweight network for a single iteration
+    def get_network(self, size, colors):
+        fully_convolutional(size=size, colors=colors)
+
+    # the recursion model
+    def reconstruction_model(self, y, fbp):
+        x = fbp
+        for k in range(self.recursions):
+            # get gradient of data term
+            grad = self.model.tensorflow_adjoint_operator(self.model.tensorflow_operator(x) - y)
+            # network with gradient of data term and current guess as input
+            with tf.variable_scope('Iteration_' + str(k)):
+                x = self.network.net(tf.concat((grad, x), axis=3))
+        return x
 
 
