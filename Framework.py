@@ -160,23 +160,7 @@ class generic_framework(object):
     def deploy(self, true, guess, measurement):
         pass
 
-
-# method that computes the average and variance of a list of numbers
-def mean_var(list):
-    mean  = 0
-    n = float(len(list)-1)
-    if n == 0:
-        n = 1.0
-
-    for j in list:
-        mean += j/n
-
-    var = 0
-    for j in list:
-        var += ((j - mean)**2 )/n
-
-    return mean, var
-
+# joint postprocessing and segmentation
 class postprocessing(generic_framework):
     model_name = 'Postprocessing'
     experiment_name = 'default_experiment'
@@ -391,24 +375,6 @@ class postprocessing(generic_framework):
                 self.log(direct_feed=True)
         self.save(self.global_step)
 
-    # def pretrain_segmentation_true_input_precropped(self, steps):
-    #     for k in range(steps):
-    #         pics, annos, ul_nod, ul_rand = self.generate_raw_segmentation_data(batch_size=self.batch_size,
-    #                                                                            scaled=self.scaled)
-    #         ul_nod = ul_nod.astype(int)
-    #         ul_rand = ul_rand.astype(int)
-    #         pic_nod = LUNA.cut_data(pics, ul_nod)
-    #         pic_ran = LUNA.cut_data(pics, ul_rand)
-    #
-    #         anno_nod = LUNA.cut_data(annos, ul_nod)
-    #         anno_ran = LUNA.cut_data(annos, ul_rand)
-    #
-    #         self.sess.run(self.optimizer_seg, feed_dict={self.pic_nod: pic_nod, self.pic_ran: pic_ran,
-    #                                                      self.seg_nod: anno_nod, self.seg_ran: anno_ran})
-    #
-    #         if k%20 == 0:
-    #             self.log(direct_feed=True)
-    #     self.save(self.global_step)
 
     def pretrain_segmentation_reconstruction_input(self, steps):
         for k in range(steps):
@@ -430,15 +396,14 @@ class postprocessing(generic_framework):
                 self.log()
         self.save(self.global_step)
 
-    # def compute(self, y, x_true, fbp, annos, ul_nod, ul_rand ):
-    #     iteration, recon, nod, anno, seg = self.sess.run([self.global_step, self.out, self.pic_nod,
-    #                                                                    self.seg_nod, self.out_seg_nod],
-    #                                            feed_dict={self.true: x_true, self.fbp: fbp,
-    #                                                       self.segmentation: annos,
-    #                                                       self.ul_nod: ul_nod, self.ul_ran: ul_rand})
-    #     return recon, nod, anno, seg
+    def evaluate(self, y, x_true, fbp, annos, ul_nod, ul_rand):
+        ce, mse, total = self.sess.run([self.ce, self.loss_l2, self.total_loss],
+                                               feed_dict={self.true: x_true, self.fbp: fbp, self.y:y,
+                                                          self.segmentation: annos,
+                                                          self.ul_nod: ul_nod, self.ul_ran: ul_rand})
+        return ce, mse, total
 
-
+# changes reconstruction algorithm to iterative descent
 class iterative_gradient_desc(postprocessing):
     model_name = 'LearnedGD'
     recursions = 4
@@ -457,5 +422,4 @@ class iterative_gradient_desc(postprocessing):
             with tf.variable_scope('Iteration_' + str(k)):
                 x = self.network.net(tf.concat((grad, x), axis=3))
         return x
-
 
