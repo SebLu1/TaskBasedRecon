@@ -170,9 +170,9 @@ class postprocessing(generic_framework):
     # scaled variable setting format of input training data
     scaled = True
     # learning rate for Adams
-    learning_rate = 0.00005
+    learning_rate = 0.0001
     # The batch size
-    batch_size = 4
+    batch_size = 8
     # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
     alpha = 0.7
     # fix the noise level
