@@ -96,8 +96,8 @@ class generic_framework(object):
         x_true = np.zeros((batch_size, 512, 512,1), dtype='float32')
         fbp = np.zeros((batch_size, 512, 512,1), dtype='float32')
         annos = np.zeros((batch_size, 512,512), dtype='float32')
-        ul_nod = np.zeros(shape=(batch_size, 2))
-        ul_rand = np.zeros(shape=(batch_size, 2))
+        ul_nod = np.zeros(shape=(batch_size, 2), dtype='float32')
+        ul_rand = np.zeros(shape=(batch_size, 2), dtype='float32')
 
         for i in range(batch_size):
             if from_source:
@@ -268,8 +268,8 @@ class postprocessing(generic_framework):
         self.segmentation = tf.placeholder(shape=[None, self.image_space[0], self.image_space[1]],
                                            dtype=tf.int32)
         self.seg_ohl = tf.one_hot(self.segmentation, depth = self.channels)
-        self.ul_nod = tf.placeholder(shape=[None, 2], dtype=tf.int32)
-        self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
+        self.ul_nod = tf.placeholder(shape=[None, 2], dtype=tf.float32)
+        self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.float32)
 
         # segmentation of patch containing nodule
         self.pic_nod = self.extract_tensor(self.out, self.ul_nod)
