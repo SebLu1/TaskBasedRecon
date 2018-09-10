@@ -24,7 +24,6 @@ from Networks import UNet_multiple_classes
 # This class provides methods necessary
 class generic_framework(object):
     model_name = 'no_model'
-    experiment_name = 'default_experiment'
 
     # set the noise level used for experiments
     noise_level = 0.02
@@ -43,7 +42,9 @@ class generic_framework(object):
         return ct(size=size)
 
 
-    def __init__(self):
+    def __init__(self, experiment_name):
+        self.experiment_name = experiment_name
+
         self.data_pip = self.get_Data_pip()
         self.colors = 1
         self.image_size = (512,512)
@@ -169,23 +170,21 @@ class postprocessing(generic_framework):
     channels = 6
     # scaled variable setting format of input training data
     scaled = True
-    # learning rate for Adams
-    learning_rate = 0.0001
     # The batch size
     batch_size = 8
-    # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
-    alpha = 0.7
     # fix the noise level
     noise_level = 0.02
 
     # some static methods that can come in handy
     @staticmethod
-    def extract_tensor(tensor, ul, batch_size, size=(64, 64)):
-        extract = tf.expand_dims(tensor[0, ul[0, 0]:ul[0, 0] + size[0], ul[0, 1]:ul[0, 1] + size[1], :], axis=0)
-        for k in range(1, batch_size):
-            new_slice = tf.expand_dims(tensor[k, ul[k, 0]:ul[k, 0] + size[0], ul[k, 1]:ul[k, 1] + size[1], :], axis=0)
-            extract = tf.concat([extract, new_slice], axis=0)
-        return extract
+    def extract_tensor(tensor, ul, size=(64, 64)):
+        size_tf = tf.constant(size)
+        offset_np = [0,0]
+        for k in range(2):
+            offset_np[k] = float(size[k]/2.0)
+        offset = tf.constant(offset_np)
+        cut = tf.image.extract_glimpse(tensor, size_tf, ul+offset, normalized=False, centered=False)
+        return cut
 
     # methods to define the models used in framework
     def get_network_segmentation(self, channels):
@@ -236,9 +235,14 @@ class postprocessing(generic_framework):
         return ce
 
 
-    def __init__(self):
+    def __init__(self, experiment_name, c, learning_rate):
         # call superclass init
-        super(postprocessing, self).__init__()
+        super(postprocessing, self).__init__(experiment_name)
+        # Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
+        self.alpha = c
+        # learning rate for Adams
+        self.learning_rate = learning_rate
+
         self.network = self.get_network(size = self.image_size, colors = self.colors)
         self.segmenter = self.get_network_segmentation(self.channels)
 
@@ -268,13 +272,13 @@ class postprocessing(generic_framework):
         self.ul_ran = tf.placeholder(shape=[None, 2], dtype=tf.int32)
 
         # segmentation of patch containing nodule
-        self.pic_nod = self.extract_tensor(self.out, self.ul_nod, batch_size=self.batch_size)
-        self.seg_nod = self.extract_tensor(self.seg_ohl, self.ul_nod, batch_size=self.batch_size)
+        self.pic_nod = self.extract_tensor(self.out, self.ul_nod)
+        self.seg_nod = self.extract_tensor(self.seg_ohl, self.ul_nod)
         ce_nod = self.segment(self.pic_nod, self.seg_nod, name='Nodule')
 
         # segmentation of random patch
-        self.pic_ran = self.extract_tensor(self.out, self.ul_ran, batch_size=self.batch_size)
-        self.seg_ran = self.extract_tensor(self.seg_ohl, self.ul_ran, batch_size=self.batch_size)
+        self.pic_ran = self.extract_tensor(self.out, self.ul_ran)
+        self.seg_ran = self.extract_tensor(self.seg_ohl, self.ul_ran)
         ce_ran = self.segment(self.pic_ran, self.seg_ran, name='Random')
 
         self.ce = ce_nod+ce_ran

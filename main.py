@@ -44,10 +44,6 @@ def model_comparison(model_list, loops):
 
     return results
 
-
-# run the experiments
-n = input('Number of experiment')
-
 # noise = 0.02
 noise = 0.05
 
@@ -56,60 +52,39 @@ model = postprocessing
 
 # list of experiments run
 class Exp1(model):
-    experiment_name = 'default_experiment'
     channels = 6
     scaled = True
-    learning_rate = 0.0001
-    batch_size = 4
+    batch_size = 8
     noise_level = noise
 
-class Exp1_1(Exp1):
-    experiment_name = 'SegmentationTrainedOnly'
 
-class Exp1_2(Exp1):
-    experiment_name = 'JointTraining'
+learning_rate_default = 0.0001
+net = Exp1(experiment_name='default_experiment', c=0, learning_rate= learning_rate_default)
+for k in range(15):
+    net.pretrain_reconstruction(500)
 
-list_1 = [Exp1, Exp1_1, Exp1_2]
+for k in range(15):
+    net.pretrain_segmentation_true_input(500)
+net.end()
 
 # List of experiments with different values of weighting parameter C
+# Convex weight alpha trading off between L2 and CE loss for joint reconstruction. 0 is pure L2, 1 is pure CE
 list_c = [0.99, 0.9, 0.5, 0.1, 0.01]
-list_2 = []
-for c in list_c:
-    class E(Exp1):
-        experiment_name = 'Joint_Weight_' + str(c)
-        alpha = c
-    list_2.append(E)
 
-
-if n == 0:
-    net = Exp1()
+# learning rates for fine-tuning
+learning_rates = [0.00005, 0.000025]
+for rate in learning_rates:
+    net = Exp1(experiment_name='Segmentation_trained_only', c=0, learning_rate= rate)
     for k in range(20):
-        net.pretrain_segmentation_true_input(500)
-    net.end()
-
-    net = Exp1()
-    for k in range(10):
-        net.pretrain_reconstruction(500)
-    net.end()
-
-    net = Exp1_1()
-    for k in range(10):
         net.pretrain_segmentation_reconstruction_input(500)
     net.end()
 
-    net = Exp1_2()
-    for k in range(10):
-        net.joint_training(500)
-    net.end()
-
-    for exp in list_2:
-        net = exp()
-        for k in range(10):
+    for c in list_c:
+        net = Exp1(experiment_name=str(c)+'_Jointly_Trained', c=c, learning_rate=rate)
+        for k in range(20):
             net.joint_training(500)
         net.end()
 
-if n == 1:
-    model_comparison(model_list=list_1+list_2, loops=10)
 
 
 
