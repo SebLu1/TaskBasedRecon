@@ -54,11 +54,11 @@ model = postprocessing
 class Exp1(model):
     channels = 6
     scaled = True
-    batch_size = 8
+    batch_size = 2
     noise_level = noise
 
 
-learning_rate_default = 0.0001
+learning_rate_default = 0.00007
 net = Exp1(experiment_name='default_experiment', c=0, learning_rate= learning_rate_default)
 for k in range(15):
     net.pretrain_reconstruction(500)
@@ -72,7 +72,7 @@ net.end()
 list_c = [0.99, 0.9, 0.5, 0.1, 0.01]
 
 # learning rates for fine-tuning
-learning_rates = [0.00005, 0.000025]
+learning_rates = [0.00003, 0.000015]
 for rate in learning_rates:
     net = Exp1(experiment_name='Segmentation_trained_only', c=0, learning_rate= rate)
     for k in range(20):
