@@ -171,7 +171,7 @@ class postprocessing(generic_framework):
     # scaled variable setting format of input training data
     scaled = True
     # The batch size
-    batch_size = 8
+    batch_size = 4
     # fix the noise level
     noise_level = 0.02
 
